@@ -1,0 +1,11 @@
+[site]
+title = "Structured Anarchy"
+base_url = "https://structured-anarchy.github.io"
+membership_form_url = ""
+
+[giscus]
+repo = "Structured-Anarchy/Structured-Anarchy.github.io"
+repo_id = ""
+category = "Discussions"
+category_id = ""
+theme = "light"

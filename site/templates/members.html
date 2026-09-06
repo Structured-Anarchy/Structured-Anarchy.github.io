@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Members | {{ site.title }}{% endblock %}
+{% block body_class %}members-page{% endblock %}
+{% block content %}
+  <section class="section-heading defocus-scope">
+    <h1 class="defocus-item">Members</h1>
+  </section>
+  <section class="member-list defocus-scope" aria-label="Structured Anarchy members">
+    {% for member in members %}
+      <article class="member-card defocus-item">
+        <div class="member-portrait-column">
+          <img class="member-portrait" src="{{ member.image_url }}" alt="{{ member.name }}" loading="lazy">
+          <dl class="member-facts">
+            <div>
+              <dt>Affiliation</dt>
+              <dd>{{ member.affiliations | join(", ") }}</dd>
+            </div>
+            <div>
+              <dt>Interests</dt>
+              <dd>{{ member.interests | join(", ") }}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="member-copy">
+          <h2>{{ member.name }}</h2>
+          <p class="member-date">Joined {{ member.join_date.isoformat() }}</p>
+          <p>{{ member.bio }}</p>
+        </div>
+      </article>
+    {% else %}
+      <p class="empty-state defocus-item">No members have been published yet.</p>
+    {% endfor %}
+  </section>
+  {% if site.membership_form_url %}
+    <section class="member-join defocus-scope" aria-labelledby="member-join-title">
+      <div class="defocus-item">
+        <p class="member-join-kicker">Join the conversation</p>
+        <h2 id="member-join-title">Bring your perspective</h2>
+        <p>Tell us about your interests and the questions you would like to explore with the club.</p>
+        <a class="member-join-button" href="{{ site.membership_form_url }}">Join Structured Anarchy</a>
+        <p class="member-join-note">The form asks separately for permission before any profile information or headshot is published.</p>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}
