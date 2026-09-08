@@ -175,7 +175,7 @@
 
   function initSpeedReader() {
     var root = document.querySelector("[data-speed-reader]");
-    var source = document.querySelector(".writing-detail .prose");
+    var source = document.querySelector(".writing-detail .prose, [data-passage-source]");
     var stage = document.querySelector("[data-speed-reader-stage]");
     var glance = document.querySelector("[data-speed-reader-glance]");
     if (!root || !source || !stage || !glance) return;
@@ -201,7 +201,7 @@
     var playButton = root.querySelector("[data-speed-reader-play]");
     var pauseButton = root.querySelector("[data-speed-reader-pause]");
     var forwardButton = root.querySelector("[data-speed-reader-forward]");
-    var panelToggleIcon = panelToggle.querySelector("span");
+    var panelToggleIcon = panelToggle && panelToggle.querySelector("span");
     if (
       !panelToggle ||
       !panel ||
@@ -250,11 +250,27 @@
     syncControls();
     renderGlance();
 
-    if (!tokens.length) {
-      panelToggle.disabled = true;
-      enabledInput.disabled = true;
-      return;
-    }
+    panelToggle.disabled = !tokens.length;
+    enabledInput.disabled = !tokens.length;
+    root.hidden = !tokens.length;
+
+    document.addEventListener("sa:reader-source", function () {
+      clearTimer();
+      clearReturnHighlight();
+      state.enabled = false;
+      state.playing = false;
+      state.index = 0;
+      lastSelectionIndex = null;
+      tokens = collectSpeedReaderTokens(source);
+      tokenIndexesByNode = indexSpeedReaderTokensByNode(tokens);
+      addSpeedReaderBlurTargets(source);
+      panelToggle.disabled = !tokens.length;
+      enabledInput.disabled = !tokens.length;
+      root.hidden = !tokens.length;
+      setPanelOpen(false);
+      syncControls();
+      renderGlance();
+    });
 
     panelToggle.addEventListener("pointerdown", rememberSourceSelection, true);
     panelToggle.addEventListener("click", function () {
@@ -466,6 +482,10 @@
       document.body.classList.toggle("speed-reading-active", state.enabled);
       stage.hidden = !state.enabled;
       stage.style.setProperty("--speed-reader-font-size", state.fontSize + "px");
+      var context = stage.querySelector("[data-speed-reader-context]");
+      var token = tokens[state.index];
+      var passage = token && token.node.parentElement.closest("[data-passage-label]");
+      if (context) context.textContent = state.enabled && passage ? passage.dataset.passageLabel : "";
       if (!state.enabled) {
         glance.textContent = "";
         return;
@@ -774,6 +794,10 @@
       if (!range) return;
       var rect = unionRangeRect(range);
       if (!rect) return;
+      if (source.closest("dialog")) {
+        range.startContainer.parentElement.scrollIntoView({ block: "center" });
+        return;
+      }
       var targetTop = window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2;
       window.scrollTo({
         top: Math.max(0, targetTop),
@@ -856,7 +880,7 @@
       acceptNode: function (node) {
         var parent = node.parentElement;
         if (!parent || !node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-        if (parent.closest("script, style, textarea, input, button")) return NodeFilter.FILTER_REJECT;
+        if (parent.closest("script, style, textarea, input, button, [data-reader-skip]")) return NodeFilter.FILTER_REJECT;
         if (parent.closest(".katex-mathml, math, semantics, annotation")) return NodeFilter.FILTER_REJECT;
         if (!parent.closest("h2, h3, h4, h5, h6, p, li, blockquote, figcaption")) {
           return NodeFilter.FILTER_REJECT;

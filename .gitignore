@@ -12,3 +12,7 @@ dist/
 sitegen.egg-info/
 .local-site.log
 .local-site.pid
+data/*
+node_modules/
+test-results/
+playwright-report/

@@ -9,3 +9,6 @@ dependencies:
       - markdown-it-py>=3.0
       - Pillow>=10.0
       - pytest>=8.0
+      - cryptography>=44.0
+      - jsonschema>=4.23
+      - tomli-w>=1.2

@@ -3,15 +3,15 @@ name: Build and deploy Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -28,18 +28,41 @@ jobs:
 
       - name: Test
         shell: bash -l {0}
-        run: conda run -n structured_anarchy_py pytest
+        run: |
+          conda run -n structured_anarchy_py pip install -r requirements-test.txt
+          conda run -n structured_anarchy_py python -m playwright install --with-deps chromium
+          conda run -n structured_anarchy_py pytest --browser-tests
+
+      - name: Check encrypted packaging
+        shell: bash -l {0}
+        run: conda run -n structured_anarchy_py python scripts/knowledge.py check-envelope
 
       - name: Build site
         shell: bash -l {0}
         run: conda run -n structured_anarchy_py python scripts/build_site.py
 
+      - name: Check public files
+        shell: bash -l {0}
+        run: conda run -n structured_anarchy_py python scripts/check_private_content.py --output dist
+
+      - name: Validate private provenance and check for plaintext leaks
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        shell: bash -l {0}
+        env:
+          SA_CONTENT_PASSKEY: ${{ secrets.CONTENT_PASSKEY }}
+        run: conda run -n structured_anarchy_py python scripts/check_private_content.py --output dist --passkey-env SA_CONTENT_PASSKEY
+
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

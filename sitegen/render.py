@@ -7,6 +7,7 @@ import shutil
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .content import ContentError, Member, SiteData, Writing
+from .vault import copy_encrypted
 
 
 def build_site(data: SiteData, root: Path, output: Path) -> None:
@@ -20,6 +21,10 @@ def build_site(data: SiteData, root: Path, output: Path) -> None:
     output.mkdir(parents=True)
     (output / ".nojekyll").write_text("", encoding="utf-8")
     copy_static_assets(root, output)
+    try:
+        private_available = copy_encrypted(root, output)
+    except (ValueError, OSError) as exc:
+        raise ContentError(f"invalid encrypted archive: {exc}") from exc
     copy_member_images(output, data.members)
     copy_writing_assets(root, output, data.discussions)
 
@@ -29,8 +34,10 @@ def build_site(data: SiteData, root: Path, output: Path) -> None:
     )
     env.filters["date_long"] = lambda value: value.strftime("%B %-d, %Y")
     env.globals["site"] = data.config
+    env.globals["private_available"] = private_available
 
     render_page(env, output / "index.html", "landing.html", active="home")
+    render_page(env, output / "structural-map" / "index.html", "structural_map.html", active="structural-map")
     render_writing_section(env, output, "discussions", "Discussions", data.discussions)
     render_page(
         env,

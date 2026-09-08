@@ -48,3 +48,7 @@ Keep commit subjects concise, imperative, and feature-focused. Pull requests sho
 ## Agent-Specific Instructions
 
 Do not commit `dist/`, `_site/`, dependency directories, local-server state, or generated caches. Preserve source content unless the task explicitly asks to change it.
+
+All readable transcripts, extracted knowledge, passkeys, and private review notes belong under ignored `data/*`. Only authenticated encrypted exports in `encrypted/` may be committed or published. Never embed the passkey or session-derived content in public assets, tests, or commit messages. Tests use fictional sources.
+
+For session extraction, use `skills/extract-theses-and-logical-structure/SKILL.md`. Its schema/provenance validation and semantic review are required before extraction is complete. See `docs/structural-map.md` for packing, restoring, browser tests, and CI checks. Probability inference remains deferred.
