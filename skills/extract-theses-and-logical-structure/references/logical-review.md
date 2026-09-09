@@ -45,10 +45,21 @@ For each active clause, retain a concise review record: exact premise IDs, signe
 
 If an older atom is broader than the actual two-sided exchange, preserve it and introduce or reuse the narrower sourced claim for that exchange. Correct the affected clause targets with a private history. An objection to one proposed intervention must not become a negation of every intervention in its class; a narrow affirmative case may support an appropriately existential broader claim, but that transfer also needs source warrant.
 
+## Preserve competing and independent routes
+
+A graph can legitimately contain `B ∧ C ⇒ A`, `D ∧ E ⇒ A`, `F ∧ G ⇒ ¬A`, and `H ⇒ ¬A` together. The first two are not the single clause `B ∧ C ∧ D ∧ E ⇒ A`; the last two neither erase nor silently weaken A's supports. Independence here means a distinct inferential route, not probabilistic independence. Deduplicate repeated premise sets and preserve shared dependencies.
+
+For a universal or inevitability claim, inspect reported failures as candidate counterexamples. A fictional source might first argue that all marked gates are passable because every marked gate is unlocked and every unlocked gate is passable. Later it reports that the north gate is marked but impassable. The two general premises support the universal claim; the two case facts refute it. Preserve both clauses and source stances, even when one speaker supplied both. The counterexample can also refute the unlocked-to-passable bridge if the source separately establishes that this gate is unlocked; do not infer that applicability fact merely to create a deeper red edge.
+
+A hoped-for benefit, moral preference, or beneficial tendency is not by itself an inevitability argument. Expose an attested or essential induced sufficiency/generalisation commitment where the source warrants that stronger inference; otherwise retain the narrower claim and record the gap. Conversely, do not dismiss an explicitly offered counterexample merely because the earlier assertion was an expectation or the objection was indirect. Check the same outcome, time horizon and exposure conditions. One failed attempt refutes a universal success claim, not every weaker possibility or beneficial tendency.
+
+Run the premise-removal and sourced-premise checks separately for every opposing route. A disputed sourced assertion still counts as source-substantiated: that label records speech provenance, not acceptance or truth. Retire a clause only for an extraction/entailment defect, not because its conclusion or a premise has a credible counterargument.
+
 ## Completion criteria
 
 - Every existing and newly added atom has support and refutation search coverage; “none found” includes a reason and source scope, not an inferred consensus.
 - Every active clause has a completed logical check, at least one source-substantiated premise, and no concealed bridge.
 - Every induced premise is essential to a named clause, independently contestable, visibly unsubstantiated, and not assigned invented assertion provenance or a speaker.
 - Repeated rules/evidence do not inflate counts; cycles do not manufacture independent support.
+- Simultaneous support/refutation and multiple routes on either side survive whenever warranted; coverage records every candidate's disposition rather than stopping after the first argument or imposing artificial balance.
 - Exact saved-record provenance and semantic review both pass, with a private correction history and no claims of human approval.
