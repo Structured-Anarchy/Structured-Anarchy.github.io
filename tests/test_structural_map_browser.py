@@ -478,6 +478,9 @@ def test_symbol_catalog_sort_meanings_passages_and_archive_navigation(browser, m
     page.locator("[data-symbol-sort]").select_option("alphabetical")
     assert page.locator(".symbol-row .writing-title").all_text_contents() == labels
     page.locator('[data-symbol="symbol-quiet"]').focus()
+    # Focus scrolls this offscreen row into view. Let that scroll event finish
+    # before Enter opens a popup which intentionally closes on scrolling.
+    page.evaluate("() => new Promise(requestAnimationFrame)")
     page.keyboard.press("Enter")
     expect(popup).to_be_visible()
     page.keyboard.press("Escape")
