@@ -106,12 +106,16 @@ html[data-theme="dark"] .induced-badge { color: #dec185; }
 .session-row { font-size: 1.3rem; padding-block: 1.1rem; display: block; }
 .transcript-title { font-size: clamp(1.6rem, 4vw, 2.5rem); line-height: 1.2; }
 .transcript-lines { margin-top: 2rem; padding-left: 2.5rem; font-size: 1.15rem; line-height: 1.65; }
+.transcript-lines.has-timestamps { padding-left: 8rem; }
 .transcript-line { position: relative; min-height: 1.65em; }
 .transcript-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.transcript-timestamp { position: absolute; top: 0; left: -8rem; width: 5.1rem; color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; line-height: calc(1.15rem * 1.65); text-align: right; white-space: pre; }
+.transcript-time-row { min-height: 0; }
+.transcript-time-row .transcript-text { height: 0; }
 .transcript-anchor { display: inline-block; width: 0; height: 1em; vertical-align: baseline; scroll-margin-top: 6rem; }
 .structural-map .transcript-marker { position: absolute; left: -2.75rem; width: 44px; height: 1.65em; min-height: 32px; padding: 0; border: 0; font-size: 1.15rem; line-height: 1; color: #3f7455; }
 html[data-theme="dark"] .transcript-marker { color: #89bd9b; }
-.transcript-highlight { color: inherit; background: rgba(194, 154, 52, 0.24); }
+.transcript-highlight, .transcript-time-highlight { color: inherit; background: rgba(194, 154, 52, 0.24); }
 .transcript-theses { position: fixed; z-index: 70; width: min(390px, calc(100vw - 1rem)); max-height: min(440px, 70dvh); overflow: auto; background: var(--paper); border: 1px solid var(--line); box-shadow: 0 0.5rem 2rem var(--shadow-soft); padding: 0.7rem 1rem; }
 .transcript-theses[hidden], [data-public-discussions][hidden] { display: none; }
 .transcript-theses ul { margin: 0; padding-left: 1.1rem; }
