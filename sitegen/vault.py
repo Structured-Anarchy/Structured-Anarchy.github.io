@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from .knowledge import DEFAULT_KNOWLEDGE, digest, local_data_path, validate_knowledge, validate_local
+from .sessions import with_session_metadata
 
 ITERATIONS = 600_000
 ASSET_RE = re.compile(r"^[a-f0-9]{32}\.bin$")
@@ -98,6 +99,7 @@ def pack(root: Path, output: Path, passkey: str) -> dict[str, int]:
              for p in (root / "data" / folder).rglob("*.txt")}
     names.update(source["file_name"] for source in kb["sources"])
     names.add(DEFAULT_KNOWLEDGE)
+    names.update(session["metadata_file"] for session in kb["sessions"] if "metadata_file" in session)
     names.update(p.relative_to(root).as_posix() for p in (root / "data/knowledge/reviews").rglob("*.md"))
     for name in sorted(names):
         raw = local_data_path(root, name).read_bytes()
@@ -153,7 +155,8 @@ def decrypt_archive(directory: Path, passkey: str) -> tuple[dict[str, Any], dict
     validate_knowledge(kb, files.__getitem__)
     # The authoring file and rendered graph must describe the same knowledge.
     import tomllib
-    if tomllib.loads(files[DEFAULT_KNOWLEDGE].decode("utf-8")) != kb:
+    authoring = with_session_metadata(tomllib.loads(files[DEFAULT_KNOWLEDGE].decode("utf-8")), files.__getitem__)
+    if authoring != kb:
         raise ValueError("encrypted authoring TOML differs from the rendered graph")
     return kb, files
 

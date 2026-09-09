@@ -1,9 +1,16 @@
 {% extends "base.html" %}
 {% block title %}{{ title }} | {{ site.title }}{% endblock %}
 {% block body_class %}writing-index-page{% endblock %}
+{% block head %}{% if section == "discussions" %}<link rel="stylesheet" href="/assets/css/structural-map.css">{% endif %}{% endblock %}
 {% block content %}
-  <section class="writing-list defocus-scope">
-    <h1 class="defocus-item">{{ title }}</h1>
+  {% if section == "discussions" %}
+    {% set archive_title = "Discussions" %}
+    {% set archive_description = "Read our session transcripts and follow passages into the structural map." %}
+    {% include "partials/archive.html" %}
+  {% endif %}
+  {% if section != "discussions" %}
+  <section class="writing-list defocus-scope" data-public-discussions>
+    {% if section == "discussions" %}<h2>Discussion notes</h2>{% else %}<h1 class="defocus-item">{{ title }}</h1>{% endif %}
     {% for item in items %}
       <a class="writing-row defocus-item" href="/{{ section }}/{{ item.slug }}/">
         <span class="writing-title">{{ item.title }}</span>
@@ -14,4 +21,6 @@
       <p class="empty-state defocus-item">No {{ title | lower }} have been published yet.</p>
     {% endfor %}
   </section>
+  {% endif %}
 {% endblock %}
+{% block scripts %}{% if section == "discussions" %}<script type="module" src="/assets/js/structural-map.js"></script>{% endif %}{% endblock %}

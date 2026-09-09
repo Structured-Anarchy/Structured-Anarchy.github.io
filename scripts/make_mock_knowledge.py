@@ -23,8 +23,8 @@ MOCK_ONE = """🌿 Fictional session one — this is test material, not a group 
 [00:30] Quiet can also mean a place that feels calm. I intend both meanings here.
 [00:40] Quiet could mean absolutely silent, but I exclude that meaning here.
 [00:50] Quiet places should stay open. Because the garden is quiet and quiet places should stay open, the garden should stay open.
-[01:00] The garden is costly. Costly places should close. Together these claims argue against the garden staying open.
-[01:10] The garden staying open also implies that the garden is quiet.
+[01:00] The garden is costly. For every costly place, the claim that it should stay open is false. Therefore it is false that the garden should stay open.
+[01:10] The garden should stay open only if it is quiet. Given that the garden should stay open, the garden is quiet.
 """
 MOCK_TWO = """Fictional session two — this is test material, not a group transcript.
 [00:00] The garden should stay open. I am using quiet in the same two meanings as before.
@@ -70,9 +70,10 @@ def mock_knowledge() -> tuple[dict, dict[str, bytes]]:
         ("garden-quiet", "The garden is quiet.", "empirical", False, "one", ["garden", "quiet"]),
         ("quiet-open", "Quiet places should stay open.", "normative", False, "one", ["Quiet", "places", "stay open"]),
         ("garden-costly", "The garden is costly.", "empirical", False, "one", ["garden", "costly"]),
-        ("costly-close", "Costly places should close.", "normative", False, "one", ["Costly", "places", "close"]),
+        ("costly-close", "For every costly place, the claim that it should stay open is false.", "normative", False, "one", ["costly", "place", "stay open"]),
         ("library-open", "The library should stay open.", "normative", True, "two", ["library", "stay open"]),
         ("library-quiet", "The library is quiet.", "empirical", False, "two", ["library", "quiet"]),
+        ("open-only-quiet", "The garden should stay open only if it is quiet.", "normative", False, "one", ["garden", "stay open", "quiet"]),
     ]
     for pid, text, kind, thesis, session, surfaces in specs:
         origins = [cite(text, session)]
@@ -99,11 +100,13 @@ def mock_knowledge() -> tuple[dict, dict[str, bytes]]:
         origin = cite(proposition["text"], "two")
         proposition["origins"].append(origin)
         kb["occurrences"].append(dict(id=f"occurrence-{pid}-again", session_id="session-two", target_type="proposition", target_id=pid, stance="asserted", origins=[origin]))
+    kb["occurrences"].append(dict(id="occurrence-garden-open-rejected", session_id="session-one",
+        target_type="proposition", target_id="garden-open", stance="rejected", origins=[line("[01:00]")]))
 
     rules = [
         ("argument-garden-support", ["garden-quiet", "quiet-open"], "garden-open", False, "[00:50]", "one", "The two premises jointly support keeping the garden open."),
-        ("argument-garden-refute", ["garden-costly", "costly-close"], "garden-open", True, "[01:00]", "one", "Cost and the stated closing principle jointly oppose keeping the garden open."),
-        ("argument-cycle", ["garden-open"], "garden-quiet", False, "[01:10]", "one", "Keeping the garden open is said to preserve its quietness."),
+        ("argument-garden-refute", ["garden-costly", "costly-close"], "garden-open", True, "[01:00]", "one", "Costliness and a policy denying the opening obligation jointly negate that obligation, rather than merely propose a contrary obligation."),
+        ("argument-cycle", ["garden-open", "open-only-quiet"], "garden-quiet", False, "[01:10]", "one", "The opening obligation and the stated necessary condition jointly entail quietness. The resulting cycle is not independent evidence."),
         ("argument-library-support", ["library-quiet", "quiet-open"], "library-open", False, "[00:10]", "two", "The quietness argument is reused for the library."),
     ]
     for rid, premises, conclusion, negated, timestamp, session, explanation in rules:
@@ -126,6 +129,61 @@ def write_mock(root: Path) -> dict:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(raw)
     return kb
+
+
+def add_induced_mock(kb: dict, files: dict[str, bytes]) -> None:
+    """Add a fictional incomplete reason and its expressly unspoken policy."""
+    name = "data/refined-transcripts/mock-two.txt"
+    extra = "[00:30] This library hosts neighbourhood study groups. That is why the library should stay open.\r\n"
+    start = len(files[name].decode())
+    files[name] += extra.encode()
+    source = next(s for s in kb["sources"] if s["file_name"] == name)
+    source["sha256"] = digest(files[name])
+    context = make_origin(name, files[name], start, start + len(extra))
+    fact_text = "This library hosts neighbourhood study groups."
+    fact_origin = make_origin(name, files[name], start + 8, start + 8 + len(fact_text))
+    policy_text = "Libraries hosting neighbourhood study groups should stay open."
+    aid = "argument-library-study"
+    for label, aliases in [("hosts", ["hosting"]), ("neighbourhood study groups", [])]:
+        suffix = label.replace(" ", "-")
+        kb["symbols"].append(dict(id="symbol-" + suffix, label=label, aliases=aliases))
+        kb["meanings"].append(dict(id="meaning-" + suffix + "-normative", symbol_id="symbol-" + suffix,
+            kind="normative", definition="Normative (undeclared)", origins=[]))
+    next(s for s in kb["symbols"] if s["id"] == "symbol-library")["aliases"].append("Libraries")
+    for pid, text, kind, origins in [
+        ("library-study", fact_text, "empirical", [fact_origin]),
+        ("study-open", policy_text, "normative", []),
+    ]:
+        bindings = []
+        for surface, sid in ([
+            ("library", "symbol-library"), ("hosts", "symbol-hosts"),
+            ("neighbourhood study groups", "symbol-neighbourhood-study-groups")
+        ] if origins else [
+            ("Libraries", "symbol-library"), ("hosting", "symbol-hosts"),
+            ("neighbourhood study groups", "symbol-neighbourhood-study-groups"), ("stay open", "symbol-open")
+        ]):
+            at = text.index(surface)
+            bindings.append(dict(start_char=at, stop_char=at + len(surface), symbol_id=sid,
+                                 meaning_ids=[sid.replace("symbol-", "meaning-") + "-normative"],
+                                 excluded_meaning_ids=[], selection="specified", origins=deepcopy(origins)))
+        proposition = dict(id=pid, text=text, scope="These fictional neighbourhood libraries.", kind=kind,
+                           thesis=False, topics=["Shared spaces"], origins=origins, bindings=bindings)
+        if not origins:
+            proposition.update(evidence_status="induced", induction=dict(
+                rationale="Hosting study groups does not establish an opening obligation without a normative policy connecting that use to continued opening.",
+                argument_ids=[aid], context_origins=[context]))
+        else:
+            kb["occurrences"].append(dict(id="occurrence-library-study", session_id="session-two",
+                target_type="proposition", target_id=pid, stance="asserted", origins=deepcopy(origins)))
+        kb["propositions"].append(proposition)
+    kb["arguments"].append(dict(id=aid, premises=[
+        dict(proposition_id="library-study", negated=False, origins=[fact_origin]),
+        dict(proposition_id="study-open", negated=False, origins=[])],
+        conclusion=dict(proposition_id="library-open", negated=False, origins=[context]),
+        explicitness="reconstructed", explanation="The expressed study-group reason needs an unspoken normative policy.", origins=[context]))
+    kb["occurrences"].append(dict(id="occurrence-library-study-argument", session_id="session-two",
+        target_type="argument", target_id=aid, stance="asserted", origins=[context]))
+    validate_knowledge(kb, files.__getitem__)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,8 @@ from typing import Any, Callable
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from .sessions import with_session_metadata
+
 SCHEMA = Path(__file__).resolve().parents[1] / "schemas" / "knowledge.schema.json"
 COLLECTIONS = ("sources", "sessions", "symbols", "meanings", "propositions", "arguments", "occurrences", "questions")
 DEFAULT_KNOWLEDGE = "data/knowledge/knowledge.toml"
@@ -142,9 +144,17 @@ def validate_knowledge(kb: dict[str, Any], read_source: Callable[[str], bytes]) 
 
     signatures: set[str] = set()
     for proposition in kb["propositions"]:
+        induced = proposition.get("evidence_status") == "induced"
+        if "induction" in proposition:
+            for aid in proposition["induction"]["argument_ids"]:
+                argument = reference("arguments", aid, proposition["id"])
+                if argument and not any(l["proposition_id"] == proposition["id"] for l in argument["premises"]):
+                    errors.append(f"{proposition['id']}: induction must identify a clause using this premise")
         spans: list[tuple[int, int]] = []
         for binding in proposition["bindings"]:
             where = proposition["id"]
+            if not induced and not binding["origins"]:
+                errors.append(f"{where}: sourced symbol binding requires origins")
             start, stop = binding["start_char"], binding["stop_char"]
             if not 0 <= start < stop <= len(proposition["text"]):
                 errors.append(f"{where}: invalid symbol character range")
@@ -172,7 +182,16 @@ def validate_knowledge(kb: dict[str, Any], read_source: Callable[[str], bytes]) 
     for argument in kb["arguments"]:
         literals = [*argument["premises"], argument["conclusion"]]
         for literal in literals:
-            reference("propositions", literal["proposition_id"], argument["id"])
+            proposition = reference("propositions", literal["proposition_id"], argument["id"])
+            if proposition and proposition.get("evidence_status") != "induced" and not literal["origins"]:
+                errors.append(f"{argument['id']}: sourced literal requires origins")
+        sourced_premises = [p for p in argument["premises"] if p["origins"] and
+                           indexes["propositions"].get(p["proposition_id"], {}).get("evidence_status") != "induced"]
+        if not sourced_premises:
+            errors.append(f"{argument['id']}: antecedent requires at least one source-substantiated atom")
+        if any(indexes["propositions"].get(p["proposition_id"], {}).get("evidence_status") == "induced"
+               for p in argument["premises"]) and argument["explicitness"] != "reconstructed":
+            errors.append(f"{argument['id']}: a clause with induced premises must be reconstructed")
         premises = [(p["proposition_id"], p["negated"]) for p in argument["premises"]]
         conclusion = argument["conclusion"]
         if len(set(premises)) != len(premises):
@@ -194,7 +213,9 @@ def validate_knowledge(kb: dict[str, Any], read_source: Callable[[str], bytes]) 
     for occurrence in kb["occurrences"]:
         session = reference("sessions", occurrence["session_id"], occurrence["id"])
         target_type = occurrence["target_type"]
-        reference({"proposition": "propositions", "argument": "arguments", "meaning": "meanings"}[target_type], occurrence["target_id"], occurrence["id"])
+        target = reference({"proposition": "propositions", "argument": "arguments", "meaning": "meanings"}[target_type], occurrence["target_id"], occurrence["id"])
+        if target_type == "proposition" and target and target.get("evidence_status") == "induced" and occurrence["stance"] in {"asserted", "withdrawn"}:
+            errors.append(f"{occurrence['id']}: an unsubstantiated induced atom cannot have an asserted or withdrawn source occurrence")
         observed.add((target_type, occurrence["target_id"]))
         if session:
             allowed = {indexes["sources"][sid]["file_name"] for sid in session["source_ids"] if sid in indexes["sources"]}
@@ -204,6 +225,8 @@ def validate_knowledge(kb: dict[str, Any], read_source: Callable[[str], bytes]) 
         for item in kb[collection]:
             if item.get("kind") == "normative" and collection == "meanings":
                 continue
+            if collection == "propositions" and item.get("evidence_status") == "induced":
+                continue  # Reconstruction context is not invented session testimony.
             if (target_type, item["id"]) not in observed:
                 errors.append(f"{item['id']}: requires at least one session occurrence")
     for question in kb["questions"]:
@@ -217,5 +240,6 @@ def validate_knowledge(kb: dict[str, Any], read_source: Callable[[str], bytes]) 
 
 def validate_local(root: Path, path: Path | None = None) -> dict[str, Any]:
     kb = load_knowledge(path or root / DEFAULT_KNOWLEDGE)
+    kb = with_session_metadata(kb, lambda name: local_data_path(root, name).read_bytes())
     validate_knowledge(kb, lambda name: local_data_path(root, name).read_bytes())
     return kb

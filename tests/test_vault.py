@@ -20,7 +20,7 @@ def archive(tmp_path):
 
 def test_roundtrip_preserves_authoring_data_and_provenance(archive, tmp_path_factory):
     kb, files = decrypt_archive(archive / "encrypted", MOCK_PASSKEY)
-    assert len(kb["propositions"]) == 7
+    assert len(kb["propositions"]) == 8
     assert files[DEFAULT_KNOWLEDGE] == (archive / DEFAULT_KNOWLEDGE).read_bytes()
     fresh = tmp_path_factory.mktemp("restore")
     assert unpack(archive / "encrypted", fresh, MOCK_PASSKEY) == 3

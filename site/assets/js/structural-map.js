@@ -1,4 +1,7 @@
 import { ContentVault } from "./vault.js";
+import { createGraphModel, sortedTheses } from "./graph-model.js";
+import { createTranscriptView, transcriptUrl } from "./transcripts.js";
+import { createSymbolBrowser } from "./symbols.js";
 
 const root = document.querySelector("[data-structural-map]");
 const form = root?.querySelector("[data-unlock-form]");
@@ -24,6 +27,11 @@ function initialize() {
   const list = root.querySelector("[data-thesis-list]");
   const rows = root.querySelector("[data-thesis-rows]");
   const search = root.querySelector("[data-thesis-search]");
+  const sort = root.querySelector("[data-thesis-sort]");
+  const sessions = root.querySelector("[data-session-list]");
+  const sessionRows = root.querySelector("[data-session-rows]");
+  const transcriptSection = root.querySelector("[data-transcript-view]");
+  const symbolSection = root.querySelector("[data-symbol-list]");
   const graph = root.querySelector("[data-graph-view]");
   const grid = root.querySelector("[data-atom-grid]");
   const context = root.querySelector("[data-argument-context]");
@@ -43,6 +51,101 @@ function initialize() {
   let frames = [];
   let popupVersion = 0;
   let meaningsBack = null;
+  let model = null;
+  const siteTitle = document.title.split(" | ").slice(1).join(" | ");
+  const transcripts = createTranscriptView(root.querySelector("[data-transcript-body]"),
+    document.querySelector("[data-transcript-menu]"), vault, id => openProposition(id));
+  const symbols = createSymbolBrowser(root.querySelector("[data-symbol-rows]"), root.querySelector("[data-symbol-sort]"),
+    document.querySelector("[data-symbol-menu]"), (symbol, meanings, list) => {
+      for (const meaning of meanings) appendMeaning(meaning.id, list, () => showSymbolMeanings(symbol));
+    });
+
+  function setPage(discussions) {
+    const symbolPage = location.pathname === "/symbols-and-meaning/";
+    const title = discussions ? "Discussions" : symbolPage ? "Symbols and Meaning" : "Structural Map";
+    root.querySelector("[data-archive-title]").textContent = title;
+    root.querySelector("[data-archive-description]").textContent = discussions
+      ? "Read our session transcripts and follow passages into the structural map."
+      : symbolPage ? "Explore our symbols, their meanings, and the passages that define them."
+      : "Follow our theses, the arguments around them, and what we mean by our words.";
+    document.title = `${title} | ${siteTitle}`;
+    document.querySelectorAll(".site-nav a").forEach(link => {
+      if (link.pathname === location.pathname) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+    const notes = document.querySelector("[data-public-discussions]");
+    if (notes) notes.hidden = !discussions || location.hash.includes("source=");
+  }
+
+  function navigate(url) {
+    if (location.pathname + location.hash !== url) history.pushState(null, "", url);
+    route();
+  }
+
+  function route() {
+    const discussions = location.pathname === "/discussions/";
+    setPage(discussions);
+    if (!kb) return;
+    closePopup();
+    preview.hidden = true;
+    transcripts.clear();
+    symbols.clear();
+    list.hidden = graph.hidden = sessions.hidden = transcriptSection.hidden = symbolSection.hidden = true;
+    root.classList.remove("is-exploring");
+    frames = [];
+    if (location.pathname === "/symbols-and-meaning/") {
+      symbolSection.hidden = false;
+      symbols.show(kb);
+    } else if (discussions) {
+      const params = new URLSearchParams(location.hash.slice(1));
+      const source = index.sources.get(params.get("source"));
+      if (source) {
+        root.classList.add("is-exploring");
+        transcriptSection.hidden = false;
+        const offset = name => params.has(name) && /^\d+$/.test(params.get(name)) ? Number(params.get(name)) : params.has(name) ? NaN : null;
+        transcripts.show(source, model, offset("start"), offset("stop"));
+      } else {
+        sessions.hidden = false;
+        renderSessions();
+        if (params.has("source")) sessionRows.prepend(element("p", "That transcript is not in this archive.", "map-error"));
+      }
+    } else {
+      let requested = "";
+      try { requested = decodeURIComponent(location.hash.slice(1)); } catch { /* Invalid fragment: show the index. */ }
+      if (index.propositions.has(requested)) renderProposition(requested);
+      else { list.hidden = false; renderList(); }
+    }
+  }
+
+  function renderSessions() {
+    sessionRows.replaceChildren();
+    const ordered = [...kb.sessions].sort((a, b) =>
+      (b.date || "").localeCompare(a.date || "") || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+    for (const session of ordered) for (const id of session.source_ids) {
+      const source = index.sources.get(id);
+      const link = element("a", session.title, "writing-row session-row");
+      link.href = transcriptUrl(id);
+      archiveLink(link);
+      sessionRows.append(link);
+    }
+    if (!kb.sessions.length) sessionRows.append(element("p", "No session transcripts have been added yet.", "empty-state"));
+  }
+
+  function archiveLink(link) {
+    link.addEventListener("click", event => {
+      if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault(); navigate(link.pathname + link.hash);
+    });
+  }
+  document.querySelectorAll('.site-nav a[href="/discussions/"], .site-nav a[href="/structural-map/"], .site-nav a[href="/symbols-and-meaning/"]').forEach(link => {
+    link.addEventListener("click", event => {
+      if (!kb || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault(); navigate(link.pathname); root.scrollIntoView({ block: "start" });
+    });
+  });
+  window.addEventListener("popstate", route);
+  window.addEventListener("hashchange", route);
+  root.querySelector("[data-sessions-back]").addEventListener("click", () => navigate("/discussions/"));
 
   function resetReader() {
     document.dispatchEvent(new CustomEvent("sa:reader-source"));
@@ -68,12 +171,15 @@ function initialize() {
     preview.replaceChildren();
     preview.hidden = true;
     vault.lock();
+    transcripts.clear();
+    symbols.clear();
+    model = null;
     kb = null;
     index = {};
     incoming.clear();
     outgoing.clear();
     frames = [];
-    [rows, grid, context, breadcrumbs].forEach(node => node.replaceChildren());
+    [rows, grid, context, breadcrumbs, sessionRows].forEach(node => node.replaceChildren());
     search.value = "";
     content.hidden = true;
     form.hidden = false;
@@ -98,24 +204,16 @@ function initialize() {
     try {
       kb = await vault.open(input.value);
       input.value = "";
-      for (const name of ["propositions", "symbols", "meanings", "arguments", "sessions"]) {
+      for (const name of ["propositions", "symbols", "meanings", "arguments", "sessions", "sources"]) {
         index[name] = new Map(kb[name].map(item => [item.id, item]));
       }
-      for (const argument of kb.arguments) {
-        const target = argument.conclusion.proposition_id;
-        if (!incoming.has(target)) incoming.set(target, []);
-        incoming.get(target).push(argument);
-        for (const premise of argument.premises) {
-          if (!outgoing.has(premise.proposition_id)) outgoing.set(premise.proposition_id, []);
-          outgoing.get(premise.proposition_id).push(argument);
-        }
-      }
+      model = createGraphModel(kb);
+      incoming = model.incoming;
+      outgoing = model.outgoing;
       form.hidden = true;
       content.hidden = false;
-      const requested = decodeURIComponent(location.hash.slice(1));
-      showList();
-      if (index.propositions.has(requested)) openProposition(requested);
-      else search.focus();
+      route();
+      if (!list.hidden) search.focus();
     } catch (error) {
       status.textContent = error.message || "The archive could not be opened. Please try again.";
       input.focus();
@@ -127,12 +225,15 @@ function initialize() {
   function renderList() {
     rows.replaceChildren();
     const query = search.value.trim().toLocaleLowerCase();
-    const theses = kb.propositions.filter(p => p.thesis && `${p.text} ${p.topics.join(" ")}`.toLocaleLowerCase().includes(query));
+    const theses = sortedTheses(kb.propositions.filter(p => p.thesis && `${p.text} ${p.topics.join(" ")}`.toLocaleLowerCase().includes(query)), sort.value, model);
     for (const thesis of theses) {
       const row = button("", () => openProposition(thesis.id), "writing-row thesis-row");
       row.append(element("span", thesis.text, "writing-title"));
-      const sessions = new Set(kb.occurrences.filter(o => o.target_type === "proposition" && o.target_id === thesis.id).map(o => o.session_id));
-      row.append(element("span", `${(incoming.get(thesis.id) || []).length} arguments · ${sessions.size} sessions`, "writing-meta"));
+      const counts = model.descendants(thesis.id);
+      const meta = element("span", undefined, "writing-meta clause-counts");
+      meta.append(element("span", `${counts.support} support`, "support-key"), document.createTextNode(" · "),
+        element("span", `${counts.refute} refute`, "refute-key"), document.createTextNode(` · ${counts.sessions.size} sessions`));
+      row.append(meta);
       row.append(element("span", thesis.topics.join(" · "), "writing-summary"));
       rows.append(row);
     }
@@ -140,21 +241,21 @@ function initialize() {
   }
 
   search.addEventListener("input", renderList);
+  sort.addEventListener("change", renderList);
 
   function showList() {
-    root.classList.remove("is-exploring");
-    frames = [];
-    list.hidden = false;
-    graph.hidden = true;
-    closePopup();
-    history.replaceState(null, "", location.pathname);
-    renderList();
+    navigate("/structural-map/");
   }
 
   function openProposition(id, negated = false) {
+    navigate(`/structural-map/#${encodeURIComponent(id)}`);
+    if (negated) renderProposition(id, negated);
+    root.scrollIntoView({ block: "start" });
+  }
+
+  function renderProposition(id, negated = false) {
     const proposition = index.propositions.get(id);
     frames = [{ label: proposition.text, literals: [{ proposition_id: id, negated }] }];
-    history.replaceState(null, "", `#${encodeURIComponent(id)}`);
     renderGraph();
   }
 
@@ -182,11 +283,15 @@ function initialize() {
     context.replaceChildren();
     if (frame.argument) {
       const argument = frame.argument;
-      context.append(element("p", argument.explanation, "argument-explanation"));
-      context.append(element("p", argument.explicitness === "reconstructed" ? "Reconstructed from context" : "Expressed in the session", "map-note"));
-      context.append(button("Argument passages ↗", () => showEvidence("Argument passages", argument.origins)));
+      const note = element("details", undefined, "reconstruction-note");
+      note.append(element("summary", argument.explicitness === "reconstructed" ? "Reconstruction note" : "Extraction note"),
+        element("p", "This explains how the exchange was mapped. It is not an extra premise or evidence of validity.", "map-note"),
+        element("p", argument.explanation, "argument-explanation"),
+        element("p", "Inference context records the connection made between claims; each atom’s passages record that assertion separately.", "map-note"),
+        button("Inference context ↗", () => showEvidence("Inference context — why these claims are connected", argument.origins)));
+      context.append(note);
       const conclusion = index.propositions.get(argument.conclusion.proposition_id);
-      context.append(element("p", `Together these premises point to: ${argument.conclusion.negated ? "¬(" : ""}${conclusion.text}${argument.conclusion.negated ? ")" : ""}`, "map-note"));
+      context.append(element("p", `All ${argument.premises.length} premise${argument.premises.length === 1 ? "" : "s"} below jointly ⇒ ${argument.conclusion.negated ? "¬(" : ""}${conclusion.text}${argument.conclusion.negated ? ")" : ""}`, "clause-heading"));
     }
     grid.replaceChildren();
     grid.classList.toggle("single-atom", frame.literals.length === 1);
@@ -216,10 +321,24 @@ function initialize() {
     }
     statement.append(document.createTextNode(chars.slice(start).join("")));
     if (literal.negated) statement.append(document.createTextNode(")"));
-    const sourceButton = button("↗", () => showEvidence("Statement passages", proposition.origins, proposition), "statement-source");
-    sourceButton.setAttribute("aria-label", `Passages for: ${proposition.text}`);
-    statement.append(document.createTextNode(" "), sourceButton);
     card.append(statement);
+    const induced = proposition.evidence_status === "induced";
+    card.classList.toggle("induced-atom", induced);
+    if (induced) {
+      card.append(element("p", "Induced · unsubstantiated", "induced-badge"),
+        element("p", "A necessary missing commitment, not an assertion found in the transcripts.", "map-note"));
+      const explanation = element("details", undefined, "induction-reason");
+      explanation.append(element("summary", "Why this premise is needed"), element("p", proposition.induction.rationale),
+        button("Reconstruction context ↗", () => showEvidence("Reconstruction context — not assertion evidence", proposition.induction.context_origins)));
+      card.append(explanation);
+    }
+    const origins = model.assertionOrigins(proposition.id);
+    if (origins.length) {
+      const sourceButton = button(induced ? "Recorded challenges ↗" : "Passages ↗", () => showEvidence("Statement passages", origins, proposition), "statement-source");
+      sourceButton.setAttribute("aria-label", `Passages for: ${proposition.text}`);
+      sourceButton.setAttribute("aria-haspopup", "dialog");
+      card.append(sourceButton);
+    }
     const previous = frames.slice(0, -1).findIndex(frame => frame.literals.some(p => p.proposition_id === proposition.id));
     const argumentsHere = incoming.get(proposition.id) || [];
     const wheel = element("div", undefined, "argument-wheel");
@@ -295,6 +414,7 @@ function initialize() {
 
   function beginPopup(title, back = null) {
     clearPopup();
+    symbols.close();
     preview.hidden = true;
     popupTitle.textContent = title;
     meaningsBack = back;
@@ -308,18 +428,11 @@ function initialize() {
     beginPopup(symbol.label);
     const back = () => showMeanings(binding);
     const selected = element("ul", undefined, "meaning-list");
-    const addMeaning = (id, parent, excluded = false) => {
-      const meaning = index.meanings.get(id);
-      const row = element("li");
-      const text = `${excluded ? "Explicitly excluded: " : ""}${meaning.definition}`;
-      if (meaning.kind === "normative") {
-        row.append(element("span", text), element("p", "No definition was declared. Assumed societal usage is risky: shared understanding has not been established.", "meaning-warning"));
-      } else row.append(button(text, () => showEvidence(meaning.definition, meaning.origins, null, back)));
-      parent.append(row);
-    };
+    const addMeaning = (id, parent, excluded = false) => appendMeaning(id, parent, back, excluded);
     binding.meaning_ids.forEach(id => addMeaning(id, selected));
     popupBody.append(element("p", binding.selection === "ambiguous" ? "The intended meaning remains ambiguous among these alternatives." : binding.selection === "collective" ? "These meanings were deliberately used together." : "Meaning used in this statement.", "map-note"), selected);
-    popupBody.append(button("Interpretation passages ↗", () => showEvidence("Why these meanings apply", binding.origins, null, back)));
+    if (binding.origins.length) popupBody.append(button("Interpretation passages ↗", () => showEvidence("Why these meanings apply", binding.origins, null, back)));
+    else popupBody.append(element("p", "This usage was reconstructed; no assertion passage substantiates it.", "map-note"));
     const others = kb.meanings.filter(m => m.symbol_id === symbol.id && !binding.meaning_ids.includes(m.id));
     if (others.length) {
       const details = element("details", undefined, "other-meanings");
@@ -329,6 +442,25 @@ function initialize() {
       details.append(unselected);
       popupBody.append(details);
     }
+  }
+
+  function appendMeaning(id, parent, back, excluded = false) {
+    const meaning = index.meanings.get(id);
+    const row = element("li");
+    const text = `${excluded ? "Explicitly excluded: " : ""}${meaning.definition}`;
+    if (meaning.kind === "normative") {
+      row.append(element("span", text), element("p", "No definition was declared. Assumed societal usage is risky: shared understanding has not been established.", "meaning-warning"));
+    } else row.append(button(text, () => showEvidence(meaning.definition, meaning.origins, null, back)));
+    parent.append(row);
+  }
+
+  function showSymbolMeanings(symbol) {
+    beginPopup(symbol.label);
+    const list = element("ul", undefined, "meaning-list");
+    for (const meaning of kb.meanings.filter(m => m.symbol_id === symbol.id)) {
+      appendMeaning(meaning.id, list, () => showSymbolMeanings(symbol));
+    }
+    popupBody.append(list);
   }
 
   async function showEvidence(title, origins, proposition = null, back = null) {
@@ -353,10 +485,16 @@ function initialize() {
         const source = kb.sources.find(s => s.file_name === passage.file_name);
         const label = `${source?.label || passage.file_name} · ${passage.start_char}–${passage.stop_char}`;
         article.dataset.passageLabel = label;
-        const citation = element("div", label, "passage-label");
+        const citation = element("a", `${label} · Open in transcript ↗`, "passage-label");
+        citation.href = transcriptUrl(source.id, passage.start_char, passage.stop_char);
+        archiveLink(citation);
         citation.title = `${passage.file_name}:${passage.start_char}-${passage.stop_char}`;
         citation.dataset.readerSkip = "";
-        const text = element("p", passage.text, "passage-text");
+        const text = element("p", undefined, "passage-text");
+        const passageLink = element("a", passage.text, "passage-transcript-link");
+        passageLink.href = citation.href;
+        archiveLink(passageLink);
+        text.append(passageLink);
         article.append(citation, text);
         passageSource.append(article);
       }

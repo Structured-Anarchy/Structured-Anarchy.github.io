@@ -15,9 +15,10 @@ The first session yields:
 - B = `garden-quiet`: “The garden is quiet.”
 - C = `quiet-open`: “Quiet places should stay open.”
 - D = `garden-costly`: “The garden is costly.”
-- E = `costly-close`: “Costly places should close.”
+- E = `costly-close`: “For every costly place, the claim that it should stay open is false.”
+- F = `open-only-quiet`: “The garden should stay open only if it is quiet.”
 
-It supplies `B ∧ C ⇒ A`, `D ∧ E ⇒ ¬A`, and `A ⇒ B`. These are three arguments. The first has two jointly necessary premises; the second opposes A. The third creates a cycle, which is recorded without treating it as independent evidence.
+It supplies `B ∧ C ⇒ A`, `D ∧ E ⇒ ¬A`, and `A ∧ F ⇒ B`. These are three arguments. The first has two jointly necessary premises; the second explicitly negates A's obligation, not merely proposes an opposite policy. The third needs its stated necessary-condition premise F and creates a cycle, which is recorded without treating it as independent evidence. Clauses generally allow any positive number of premises, not just two.
 
 The second session introduces `library-open` and `library-quiet`, reusing C in `library-quiet ∧ C ⇒ library-open`. It revisits A, adding an occurrence and passage without duplicating the proposition. “What do we mean by costly?” remains an open question; no definition is invented.
 
@@ -32,11 +33,13 @@ The speaker deliberately selects meanings 2 and 3, so the binding is `collective
 
 | Tempting output | Correct action |
 | --- | --- |
-| Invent “all costly places are bad” as a bridge | Record only the actual closing principle; retain other gaps as questions. |
+| Invent “all costly places are bad” merely because it sounds plausible | Use an actual source principle, or only an essential minimal induced premise with explicit unsubstantiated status and a sourced co-premise. Otherwise retain the gap as a question. |
 | Turn a definition question into a definition | Keep the default meaning and record the question. |
 | Count a repeated argument twice | Reuse the rule ID, union evidence, and record occurrences. |
 | Delete the silent meaning | Retain it globally and mark its local exclusion. |
 | Infer confidence from the cycle | Preserve graph identity; inference is deferred. |
 | Cite a large range spanning unrelated tangents | Use the smallest sufficient union of passages. |
+
+The mock illustrates sourced records, conjunctions, reuse and cycles. Apply the counterexample test in `logical-review.md` even when a source asserts an implication. The explicit policy and necessary condition are essential: an obligation to remain open does not by itself entail factual quietness, and an obligation to close is not automatically the negation of an obligation to remain open.
 
 The tests in `tests/test_knowledge.py`, `tests/test_vault.py`, and `tests/test_structural_map_browser.py` exercise these invariants. Passing them does not replace semantic review of a real extraction.

@@ -31,6 +31,16 @@
       }
     },
     "origins": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/origin"}},
+    "optionalOrigins": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/origin"}},
+    "induction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rationale", "argument_ids", "context_origins"],
+      "properties": {
+        "rationale": {"$ref": "#/$defs/text"},
+        "argument_ids": {"allOf": [{"$ref": "#/$defs/ids"}], "minItems": 1},
+        "context_origins": {"$ref": "#/$defs/origins"}
+      }
+    },
     "source": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "file_name", "sha256", "label"],
@@ -45,7 +55,9 @@
       "properties": {
         "id": {"$ref": "#/$defs/id"}, "title": {"$ref": "#/$defs/text"},
         "source_ids": {"allOf": [{"$ref": "#/$defs/ids"}], "minItems": 1},
-        "date": {"type": "string", "format": "date"}
+        "date": {"type": "string", "format": "date"},
+        "location": {"$ref": "#/$defs/text"},
+        "metadata_file": {"type": "string", "pattern": "^data/knowledge/sessions/[a-z0-9-]+\\.toml$"}
       }
     },
     "symbol": {
@@ -78,7 +90,7 @@
         "meaning_ids": {"allOf": [{"$ref": "#/$defs/ids"}], "minItems": 1},
         "excluded_meaning_ids": {"$ref": "#/$defs/ids"},
         "selection": {"enum": ["specified", "ambiguous", "collective"]},
-        "origins": {"$ref": "#/$defs/origins"}
+        "origins": {"$ref": "#/$defs/optionalOrigins"}
       }
     },
     "proposition": {
@@ -89,15 +101,22 @@
         "scope": {"$ref": "#/$defs/text"},
         "kind": {"enum": ["empirical", "normative", "definitional"]}, "thesis": {"type": "boolean"},
         "topics": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
-        "origins": {"$ref": "#/$defs/origins"},
+        "origins": {"$ref": "#/$defs/optionalOrigins"},
+        "evidence_status": {"enum": ["sourced", "induced"]},
+        "induction": {"$ref": "#/$defs/induction"},
         "bindings": {"type": "array", "items": {"$ref": "#/$defs/binding"}}
-      }
+      },
+      "allOf": [{
+        "if": {"required": ["evidence_status"], "properties": {"evidence_status": {"const": "induced"}}},
+        "then": {"required": ["induction"], "properties": {"origins": {"maxItems": 0}}},
+        "else": {"properties": {"origins": {"minItems": 1}}}
+      }]
     },
     "literal": {
       "type": "object", "additionalProperties": false,
       "required": ["proposition_id", "negated", "origins"],
       "properties": {
-        "proposition_id": {"$ref": "#/$defs/id"}, "negated": {"type": "boolean"}, "origins": {"$ref": "#/$defs/origins"}
+        "proposition_id": {"$ref": "#/$defs/id"}, "negated": {"type": "boolean"}, "origins": {"$ref": "#/$defs/optionalOrigins"}
       }
     },
     "argument": {

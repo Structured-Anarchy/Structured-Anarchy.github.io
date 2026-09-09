@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Symbols and Meaning | {{ site.title }}{% endblock %}
+{% block body_class %}symbols-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="/assets/css/structural-map.css">{% endblock %}
+{% block content %}
+  {% set archive_title = "Symbols and Meaning" %}
+  {% set archive_description = "Explore our symbols, their meanings, and the passages that define them." %}
+  {% include "partials/archive.html" %}
+{% endblock %}
+{% block scripts %}<script type="module" src="/assets/js/structural-map.js"></script>{% endblock %}

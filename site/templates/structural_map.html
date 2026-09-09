@@ -3,52 +3,9 @@
 {% block body_class %}structural-map-page{% endblock %}
 {% block head %}<link rel="stylesheet" href="/assets/css/structural-map.css">{% endblock %}
 {% block content %}
-  <section class="structural-map" data-structural-map data-manifest="/assets/private/manifest.json">
-    <header class="map-heading">
-      <p class="map-kicker">A shared inquiry</p>
-      <h1>Structural Map</h1>
-      <p>Follow our theses, the arguments around them, and what we mean by our words.</p>
-    </header>
-    {% if private_available %}
-      <form class="vault-form" data-unlock-form>
-        <label for="content-passkey">Enter the group’s passkey</label>
-        <div class="vault-input-row">
-          <input id="content-passkey" name="passkey" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required aria-describedby="vault-note vault-status">
-          <button type="submit">Unlock</button>
-        </div>
-        <p id="vault-note" class="map-note">Your passkey is visible as you type. Refreshing locks the archive again.</p>
-        <p id="vault-status" role="status" aria-live="polite"></p>
-      </form>
-      <div data-map-content hidden>
-        <div class="map-tools"><button type="button" data-lock>Lock archive</button><span class="map-note">Passages open as you explore.</span></div>
-        <section data-thesis-list aria-label="Theses">
-          <label class="map-search-label" for="thesis-search">Find a thesis or topic</label>
-          <input id="thesis-search" type="search" data-thesis-search autocomplete="off">
-          <div data-thesis-rows></div>
-        </section>
-        <section data-graph-view hidden aria-label="Argument explorer">
-          <div class="map-navigation"><button type="button" data-map-up aria-label="Go up one view">↑ Up</button><nav data-breadcrumbs aria-label="Argument path"></nav></div>
-          <div data-argument-context></div>
-          <p class="map-legend"><span class="support-key">+ Supports</span><span class="refute-key">− Refutes</span><span>Choose a segment to explore its premises.</span></p>
-          <div class="atom-grid" data-atom-grid></div>
-        </section>
-      </div>
-    {% else %}
-      <p class="empty-state">The session archive has not been published yet.</p>
-    {% endif %}
-    <noscript><p>Enable JavaScript to unlock the archive and explore the map.</p></noscript>
-  </section>
-  <div class="meaning-preview" data-meaning-preview role="tooltip" hidden></div>
-  <dialog class="evidence-dialog" data-evidence-dialog aria-labelledby="evidence-title">
-    <div class="evidence-toolbar">
-      <button type="button" data-evidence-back hidden>← Meanings</button>
-      <button type="button" data-evidence-close aria-label="Close popup">×</button>
-    </div>
-    <h2 id="evidence-title"></h2>
-    <div data-evidence-body></div>
-    <div data-passage-source></div>
-    {% include "partials/speed_reader.html" %}
-  </dialog>
+  {% set archive_title = "Structural Map" %}
+  {% set archive_description = "Follow our theses, the arguments around them, and what we mean by our words." %}
+  {% include "partials/archive.html" %}
 {% endblock %}
 {% block scripts %}
   <script type="module" src="/assets/js/structural-map.js"></script>
