@@ -230,6 +230,12 @@ def validate_knowledge(kb: dict[str, Any], read_source: Callable[[str], bytes]) 
             if (target_type, item["id"]) not in observed:
                 errors.append(f"{item['id']}: requires at least one session occurrence")
     for question in kb["questions"]:
+        if "session_id" in question:
+            session = reference("sessions", question["session_id"], question["id"])
+            if session:
+                allowed = {indexes["sources"][sid]["file_name"] for sid in session["source_ids"] if sid in indexes["sources"]}
+                if any(origin["file_name"] not in allowed for origin in question["origins"]):
+                    errors.append(f"{question['id']}: question evidence is outside its session")
         for pid in question["proposition_ids"]:
             reference("propositions", pid, question["id"])
         for sid in question["symbol_ids"]:
