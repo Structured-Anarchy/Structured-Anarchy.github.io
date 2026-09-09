@@ -329,6 +329,25 @@ def test_shared_cycle_counts_deep_sessions_and_sort_modes(browser, mock_site):
     page.close()
 
 
+def test_independent_opposition_counts_include_contested_premises(browser, mock_site):
+    from test_competing_arguments import competing_knowledge
+    url, _ = mock_site
+    kb, _ = competing_knowledge()
+    page = browser.new_page()
+    page.goto(url + "/structural-map/")
+    result = page.evaluate("""async kb => {
+      const {createGraphModel} = await import('/assets/js/graph-model.js');
+      const model = createGraphModel(kb);
+      const root = model.descendants('marked-passable');
+      const premise = model.descendants('unlocked-passable');
+      return {root:[root.support, root.refute, root.clauses.size],
+              premise:[premise.support, premise.refute, premise.clauses.size]};
+    }""", kb)
+    # Shared bypass and north-gate facts are reused, not separately counted as rules.
+    assert result == dict(root=[3, 3, 6], premise=[1, 1, 2])
+    page.close()
+
+
 def test_permalink_keyboard_shared_uses_and_manual_lock(browser, mock_site):
     from playwright.sync_api import expect
     url, _ = mock_site
