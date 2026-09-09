@@ -114,7 +114,7 @@ def mock_knowledge() -> tuple[dict, dict[str, bytes]]:
         literal = lambda pid, sign=False: dict(proposition_id=pid, negated=sign, origins=deepcopy(origins))
         kb["arguments"].append(dict(id=rid, premises=[literal(pid) for pid in premises], conclusion=literal(conclusion, negated), explicitness="explicit", explanation=explanation, origins=origins))
         kb["occurrences"].append(dict(id=f"occurrence-{rid}", session_id=f"session-{session}", target_type="argument", target_id=rid, stance="asserted", origins=deepcopy(origins)))
-    kb["questions"].append(dict(id="question-costly", text="What do we mean by costly?", proposition_ids=["garden-costly"], symbol_ids=["symbol-costly"], origins=[line("[00:20]", "two")]))
+    kb["questions"].append(dict(id="question-costly", text="What do we mean by costly?", origin_kind="session", session_id="session-two", proposition_ids=["garden-costly"], symbol_ids=["symbol-costly"], origins=[line("[00:20]", "two")]))
     validate_knowledge(kb, files.__getitem__)
     return kb, files
 

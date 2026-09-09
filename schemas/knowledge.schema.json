@@ -145,8 +145,14 @@
       "required": ["id", "text", "proposition_ids", "symbol_ids", "origins"],
       "properties": {
         "id": {"$ref": "#/$defs/id"}, "text": {"$ref": "#/$defs/text"},
+        "origin_kind": {"enum": ["session", "extraction_review"]},
+        "session_id": {"$ref": "#/$defs/id"},
         "proposition_ids": {"$ref": "#/$defs/ids"}, "symbol_ids": {"$ref": "#/$defs/ids"}, "origins": {"$ref": "#/$defs/origins"}
-      }
+      },
+      "allOf": [{
+        "if": {"required": ["origin_kind"], "properties": {"origin_kind": {"const": "session"}}},
+        "then": {"required": ["session_id"]}
+      }]
     }
   }
 }

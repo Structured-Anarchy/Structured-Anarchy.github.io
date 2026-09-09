@@ -14,6 +14,30 @@ def test_empty_base_and_reused_cyclic_mock_are_valid():
 
 
 @pytest.mark.parametrize("mutation,match", [
+    (lambda q: q.pop("session_id"), "session_id.*required"),
+    (lambda q: q.update(session_id="missing"), "unknown sessions"),
+    (lambda q: q.update(session_id="session-one"), "question evidence is outside its session"),
+    (lambda q: q.update(origin_kind="guessed"), "not one of"),
+])
+def test_session_questions_require_valid_session_provenance(mutation, match):
+    kb, files = mock_knowledge()
+    mutation(kb["questions"][0])
+    with pytest.raises(KnowledgeError, match=match):
+        validate_knowledge(kb, files.__getitem__)
+
+
+@pytest.mark.parametrize("kind", [None, "extraction_review"])
+def test_review_and_legacy_questions_remain_recoverable(kind):
+    kb, files = mock_knowledge()
+    question = kb["questions"][0]
+    question.pop("session_id")
+    question.pop("origin_kind")
+    if kind:
+        question["origin_kind"] = kind
+    validate_knowledge(kb, files.__getitem__)
+
+
+@pytest.mark.parametrize("mutation,match", [
     (lambda k: k["propositions"][0].update(origins=[]), "non-empty"),
     (lambda k: k["propositions"][0]["origins"][0].update(start_char=999999), "invalid character range"),
     (lambda k: k["arguments"][0]["premises"][0]["origins"][0].update(first_6_chars="BROKEN"), "six characters"),

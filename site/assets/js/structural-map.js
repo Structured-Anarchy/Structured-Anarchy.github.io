@@ -47,7 +47,6 @@ function initialize() {
   let kb = null;
   let index = {};
   let incoming = new Map();
-  let outgoing = new Map();
   let frames = [];
   let popupVersion = 0;
   let meaningsBack = null;
@@ -177,7 +176,6 @@ function initialize() {
     kb = null;
     index = {};
     incoming.clear();
-    outgoing.clear();
     frames = [];
     [rows, grid, context, breadcrumbs, sessionRows].forEach(node => node.replaceChildren());
     search.value = "";
@@ -209,7 +207,6 @@ function initialize() {
       }
       model = createGraphModel(kb);
       incoming = model.incoming;
-      outgoing = model.outgoing;
       form.hidden = true;
       content.hidden = false;
       route();
@@ -387,14 +384,16 @@ function initialize() {
       wheel.append(svg);
       card.append(wheel);
     }
-    const uses = [...new Set((outgoing.get(proposition.id) || []).map(a => a.conclusion.proposition_id))];
+    const uses = model.otherTheses(proposition.id, frames[0]?.literals[0].proposition_id);
     if (uses.length) {
       const details = element("details", undefined, "other-uses");
-      details.append(element("summary", `Also used in ${uses.length} statement${uses.length === 1 ? "" : "s"}`));
-      for (const id of uses) details.append(button(index.propositions.get(id).text, () => openProposition(id)));
+      details.append(element("summary", `Also used in ${uses.length} ${uses.length === 1 ? "thesis" : "theses"}`));
+      for (const thesis of uses) details.append(button(thesis.text, () => openProposition(thesis.id)));
       card.append(details);
     }
-    const questions = kb.questions.filter(q => q.proposition_ids.includes(proposition.id));
+    // Legacy/unclassified questions are hidden until their session origin has
+    // been reviewed. Extraction context is not testimony that a question arose.
+    const questions = kb.questions.filter(q => q.origin_kind === "session" && q.proposition_ids.includes(proposition.id));
     for (const question of questions) card.append(button(`Open question: ${question.text}`, () => showEvidence("Open question", question.origins), "open-question"));
     return card;
   }

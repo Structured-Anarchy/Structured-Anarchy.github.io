@@ -1,6 +1,7 @@
 """Exercise actual Web Crypto and the complete explorer against fictional data."""
 
 from functools import partial
+from copy import deepcopy
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import shutil
@@ -37,6 +38,15 @@ def mock_site(tmp_path_factory):
     origin = thesis["origins"][0]
     raw = (root / origin["file_name"]).read_bytes()
     thesis["origins"].append(make_origin(origin["file_name"], raw, origin["start_char"] + 4, origin["stop_char"]))
+    for identifier, kind in (("question-review", "extraction_review"), ("question-legacy", None)):
+        question = deepcopy(kb["questions"][0])
+        question.update(id=identifier, text=f"Private reviewer prompt: {identifier}")
+        question.pop("session_id")
+        if kind:
+            question["origin_kind"] = kind
+        else:
+            question.pop("origin_kind")
+        kb["questions"].append(question)
     (root / DEFAULT_KNOWLEDGE).write_text(tomli_w.dumps(kb))
     shutil.copytree(ROOT / "site", root / "site")
     # Discussion detail exists only in this synthetic preview, not on the real site.
@@ -88,6 +98,51 @@ def click_segment(page, selector):
       return { x: screen.x, y: screen.y };
     }""")
     page.mouse.click(point["x"], point["y"])
+
+
+@pytest.mark.parametrize("width", [1440, 390])
+def test_only_session_questions_and_other_thesis_links(browser, mock_site, width):
+    from playwright.sync_api import expect
+    url, _ = mock_site
+    page = browser.new_page(viewport={"width": width, "height": 950})
+    page.goto(url + "/structural-map/#garden-open")
+    unlock(page)
+    # Cycles must not suggest the current thesis as an alternative use.
+    expect(page.locator('[data-proposition="garden-open"] .other-uses')).to_have_count(0)
+    click_segment(page, "path.support-segment")
+    shared = page.locator('[data-proposition="quiet-open"] .other-uses')
+    expect(shared.locator("summary")).to_have_text("Also used in 1 thesis")
+    shared.locator("summary").click()
+    expect(shared.get_by_role("button")).to_have_count(1)
+    shared.get_by_role("button", name="The library should stay open.", exact=True).click()
+    expect(page.locator('[data-proposition="library-open"]')).to_have_count(1)
+    page.goto(url + "/structural-map/#garden-costly")
+    # Fragment navigation retains the unlocked in-memory archive.
+    expect(page.locator(".open-question")).to_have_count(1)
+    expect(page.locator(".open-question")).to_have_text("Open question: What do we mean by costly?")
+    assert "Private reviewer prompt" not in page.locator("body").inner_text()
+    page.locator(".open-question").click()
+    expect(page.locator(".source-passage")).to_have_count(1)
+    expect(page.locator("[data-evidence-dialog]")).to_contain_text("What do we mean by costly?")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    page.close()
+
+
+def test_other_theses_include_indirect_users_and_deduplicate_cycles(browser, mock_site):
+    url, _ = mock_site
+    page = browser.new_page()
+    page.goto(url + "/structural-map/")
+    result = page.evaluate("""async () => {
+      const { createGraphModel } = await import('/assets/js/graph-model.js');
+      const p = (id, thesis) => ({ id, text: id, thesis, origins: [] });
+      const a = (id, premise, head) => ({ id, premises: [{ proposition_id: premise, origins: [] }], conclusion: { proposition_id: head, negated: false, origins: [] } });
+      const kb = { sources: [], sessions: [], occurrences: [],
+        propositions: [p('current', true), p('shared', false), p('middle', false), p('other', true), p('third', true), p('unrelated', true)],
+        arguments: [a('a', 'shared', 'current'), a('b', 'shared', 'middle'), a('c', 'middle', 'other'), a('d', 'other', 'middle'), a('e', 'shared', 'other'), a('f', 'shared', 'third')] };
+      return createGraphModel(kb).otherTheses('shared', 'current').map(p => p.id);
+    }""")
+    assert result == ["other", "third"]
+    page.close()
 
 
 @pytest.mark.parametrize("viewport", [{"width": 1440, "height": 1000}, {"width": 390, "height": 844}])

@@ -11,7 +11,7 @@ The authoritative schema is `schemas/knowledge.schema.json`; semantic checks liv
 | `[[propositions]]` | `id`, `text`, `scope`, `kind`, `thesis`, `topics`, `origins`, `bindings` | `kind`: `empirical`, `normative`, `definitional`. `thesis` is boolean. Optional `evidence_status` is `sourced` (the default) or `induced`; the latter requires `induction`. |
 | `[[arguments]]` | `id`, `premises`, `conclusion`, `explicitness`, `explanation`, `origins` | Premises jointly imply one signed conclusion. `explicitness`: `explicit` or `reconstructed`. |
 | `[[occurrences]]` | `id`, `session_id`, `target_type`, `target_id`, `stance`, `origins` | Target type: `proposition`, `argument`, `meaning`. Optional source-grounded `attribution`. |
-| `[[questions]]` | `id`, `text`, `proposition_ids`, `symbol_ids`, `origins` | An unanswered question or unsupported bridge. Related-ID arrays may be empty. |
+| `[[questions]]` | `id`, `text`, `proposition_ids`, `symbol_ids`, `origins` | Add `origin_kind = "session"` and `session_id` for a verified participant question; use `origin_kind = "extraction_review"` for a private review question. Related-ID arrays may be empty. Unclassified legacy questions are hidden. |
 
 Each origin has exactly `file_name`, `start_char`, `stop_char`, `first_6_chars`, `last_6_chars`. Generate the TOML inline table with `scripts/knowledge.py cite`; register its refined source first. Source-substantiated assertion, binding, literal, argument and occurrence origins are nonempty. The normative placeholder's origins are empty. The induced-premise exception below does not relax provenance for sourced records. Every actual pointer, including induction context, is validated.
 
@@ -25,6 +25,8 @@ A binding goes in `[[propositions.bindings]]` immediately below its owning propo
 - `origins`: transcript passages establishing this usage.
 
 Bindings cannot overlap. Repeated words need separate ranges. Identically worded claims with different referents, time, or meanings must have distinct scope/bindings rather than silently sharing an inference variable.
+
+Question origin fields are an additive version-1 extension. Only questions explicitly classified as `session` are shown. Their required `session_id` must reference a session containing every cited source, and the passages must actually ask the question (a semantic check, not an automatic consequence of valid pointers). Review questions and unclassified legacy records remain recoverable but invisible in the website explorer.
 
 A literal has `proposition_id`, boolean `negated`, and `origins`. `premises` is a nonempty array of literals of any arity; `conclusion` is one literal. Source-substantiated literals require nonempty origins. Argument origins substantiate the interpreted argumentative connection; literal origins substantiate assertions in that argument. These are separate from the logical-completeness obligation.
 

@@ -61,7 +61,13 @@ export function createGraphModel(kb) {
     }
     return [...related].sort((a, b) => a[0] - b[0]).map(([start, ids]) => ({ start, theses: [...ids].map(id => propositions.get(id)) }));
   }
-  return { incoming, outgoing, descendants, transcriptMarkers,
+  function otherTheses(id, currentThesisId) {
+    // A premise can be shared through several intermediate clauses or a cycle.
+    // Show actual thesis entry points once, excluding the current exploration.
+    return kb.propositions.filter(p => p.thesis && p.id !== currentThesisId && p.id !== id && descendants(p.id).atoms.has(id))
+      .sort((a, b) => a.text.localeCompare(b.text) || a.id.localeCompare(b.id));
+  }
+  return { incoming, outgoing, descendants, transcriptMarkers, otherTheses,
     assertionOrigins: id => [...(assertions.get(id)?.values() || [])] };
 }
 
