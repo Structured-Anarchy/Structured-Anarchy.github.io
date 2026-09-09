@@ -12,6 +12,12 @@ export function transcriptUrl(sourceId, start, stop) {
   return `/discussions/#${params}`;
 }
 
+function timestampPrefix(line) {
+  // Only treat standalone timecodes and bracketed leading timecodes as
+  // annotations. Times mentioned within spoken sentences remain readable.
+  return line.match(/^[ \t]*(?:\[~?\d{2,}:[0-5]\d(?::[0-5]\d)?\](?:[ \t]+|(?=\r?$))|~?\d{2,}:[0-5]\d(?::[0-5]\d)?[ \t\r]*$)/)?.[0] || "";
+}
+
 export function createTranscriptView(container, popup, vault, onThesis) {
   let version = 0, observer = null, trigger = null, closeTimer = null;
   function closeMenu() {
@@ -81,7 +87,7 @@ export function createTranscriptView(container, popup, vault, onThesis) {
       }
       container.replaceChildren();
       container.append(node("h2", source.label, "transcript-title"),
-        node("p", "Margin markers link to theses using a passage as assertion evidence, including premises and objections. A citation records what was said; it does not prove it true.", "map-note"));
+        node("p", "Timestamps sit in the margin and are skipped during speed reading; ~ marks an estimated time. Margin markers link to theses using a passage as assertion evidence, including premises and objections. A citation records what was said; it does not prove it true.", "map-note"));
       const body = node("div", undefined, "transcript-lines");
       body.dataset.transcriptSource = source.id;
       body.dataset.passageLabel = source.label;
@@ -91,20 +97,38 @@ export function createTranscriptView(container, popup, vault, onThesis) {
         if (end < chars.length && chars[end] !== "\n") continue;
         const row = node("div", undefined, "transcript-line"), content = node("div", undefined, "transcript-text");
         row.dataset.start = lineStart;
+        const line = chars.slice(lineStart, end).join(""), prefix = timestampPrefix(line);
+        const timestampEnd = lineStart + Array.from(prefix).length;
+        let timestamp = null;
+        if (prefix) {
+          body.classList.add("has-timestamps");
+          timestamp = node("span", undefined, "transcript-timestamp");
+          timestamp.dataset.readerSkip = "";
+          content.append(timestamp);
+          // A standalone timestamp shares the following text row's margin.
+          // Keep an isolated or consecutive timecode on its own row instead.
+          const nextEnd = chars.indexOf("\n", end + 1);
+          const nextLine = chars.slice(end + 1, nextEnd < 0 ? chars.length : nextEnd).join("");
+          if (!line.slice(prefix.length).trim() && nextLine.trim() && !timestampPrefix(nextLine)) {
+            row.classList.add("transcript-time-row");
+          }
+        }
         const here = [];
         while (markerIndex < markers.length && markers[markerIndex].start <= end) here.push(markers[markerIndex++]);
         const cuts = new Set([lineStart, end, ...here.map(m => m.start)]);
+        if (timestamp) cuts.add(timestampEnd);
         if (start !== null && start >= lineStart && start <= end) cuts.add(start);
         if (stop !== null && stop > lineStart && stop < end) cuts.add(stop);
         const ordered = [...cuts].sort((a, b) => a - b);
         for (let i = 0; i < ordered.length; i += 1) {
           const at = ordered[i];
+          const destination = timestamp && at < timestampEnd ? timestamp : content;
           const marker = here.find(m => m.start === at);
           if (marker || at === start) {
             const anchor = node("span", undefined, "transcript-anchor");
             anchor.dataset.char = at;
             anchor.setAttribute("aria-hidden", "true");
-            content.append(anchor);
+            destination.append(anchor);
             if (at === start) target = anchor;
             if (marker) {
               const button = node("button", "◈", "transcript-marker");
@@ -123,8 +147,11 @@ export function createTranscriptView(container, popup, vault, onThesis) {
           }
           if (i + 1 < ordered.length) {
             const segment = chars.slice(at, ordered[i + 1]).join("");
-            if (start !== null && at >= start && at < (stop ?? start + 1)) content.append(node("mark", segment, "transcript-highlight"));
-            else content.append(document.createTextNode(segment));
+            // Keep timestamp highlights out of the reader's passage-start
+            // selector, so a cited turn starts at its first spoken word.
+            if (start !== null && at >= start && at < (stop ?? start + 1)) destination.append(node("mark", segment,
+              destination === timestamp ? "transcript-time-highlight" : "transcript-highlight"));
+            else destination.append(document.createTextNode(segment));
           }
         }
         row.append(content); body.append(row);
@@ -134,10 +161,16 @@ export function createTranscriptView(container, popup, vault, onThesis) {
       document.dispatchEvent(new CustomEvent("sa:reader-source"));
       function positionMarkers() {
         const groups = new Map();
+        const bodyTop = body.getBoundingClientRect().top;
+        const lineHeight = parseFloat(getComputedStyle(body).lineHeight);
         for (const position of positions) {
           const { row, anchor, button } = position;
-          const top = Math.round(anchor.getBoundingClientRect().top - row.getBoundingClientRect().top);
-          const key = `${row.dataset.start}:${top}`;
+          const rowTop = row.getBoundingClientRect().top;
+          const top = anchor.closest(".transcript-timestamp") ? 0 :
+            Math.floor(Math.max(0, anchor.getBoundingClientRect().top - rowTop) / lineHeight) * lineHeight;
+          // A timestamp-only source line can share a visual row with speech.
+          // Group by visual position so their evidence buttons do not overlap.
+          const key = Math.round(rowTop - bodyTop + top);
           const group = groups.get(key);
           button.hidden = Boolean(group);
           if (group) group.theses.push(...position.theses);

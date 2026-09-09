@@ -511,6 +511,139 @@ def test_transcript_reader_keeps_words_whole_at_provenance_boundaries(browser, m
     page.close()
 
 
+def render_timestamp_example(page, text, start=None, stop=None, markers=()):
+    """Exercise uncommon source layouts without changing the encrypted fixture."""
+    page.evaluate("""async ({text, start, stop, markers}) => {
+      const {createTranscriptView} = await import('/assets/js/transcripts.js');
+      window.timestampExample?.clear();
+      document.querySelector('#timestamp-example-menu')?.remove();
+      const menu = document.querySelector('[data-transcript-menu]').cloneNode();
+      menu.id = 'timestamp-example-menu';
+      menu.removeAttribute('data-transcript-menu');
+      document.body.append(menu);
+      window.timestampExample = createTranscriptView(
+        document.querySelector('[data-transcript-body]'),
+        menu,
+        {source: async () => text}, () => {});
+      await window.timestampExample.show(
+        {id: 'timestamp-example', file_name: 'fictional.txt', label: 'Fictional timestamp examples'},
+        {transcriptMarkers: () => markers}, start, stop);
+    }""", dict(text=text, start=start, stop=stop, markers=markers))
+
+
+@pytest.mark.parametrize("width", [1440, 390, 320])
+def test_timestamp_margins_preserve_source_and_share_marker_rows(browser, mock_site, width):
+    from playwright.sync_api import expect
+    url, _ = mock_site
+    page = browser.new_page(viewport={"width": width, "height": 950}, has_touch=width != 1440)
+    page.goto(url + "/discussions/#source=source-one")
+    unlock(page)
+    page.locator(".transcript-lines").wait_for()
+    # CRLF, astral Unicode, estimates, and bracketed inline times all keep
+    # their original codepoint positions. A time in speech is not an annotation.
+    raw = ("00:05\r\n🌿 The garden is quiet.\r\n\r\n"
+           "~01:02:03\nThe library is quiet.\n\n"
+           "[00:25] We meet at 12:30 today.\n"
+           "01:02:09\nQuiet places should stay open.\n")
+    start = raw.index("~01:02:03")
+    speech = raw.index("The library")
+    stop = speech + len("The library is quiet.")
+    markers = [
+        dict(start=start, theses=[dict(id="garden-open", text="The garden should stay open.")]),
+        dict(start=speech, theses=[dict(id="library-open", text="The library should stay open.")]),
+    ]
+    render_timestamp_example(page, raw, start, stop, markers)
+    expect(page.locator(".transcript-timestamp")).to_have_count(4)
+    expect(page.locator(".transcript-time-row")).to_have_count(3)
+    assert page.locator(".transcript-text").evaluate_all("rows => rows.map(r => r.textContent).join('\\n')") == raw
+    expect(page.locator(".transcript-highlight")).to_have_text("The library is quiet.")
+    expect(page.locator(".transcript-time-highlight")).to_have_text("~01:02:03")
+    # All timestamps are left of the marker gutter, and collapsed standalone
+    # timecodes align with the following source line without taking a text row.
+    assert page.locator(".transcript-timestamp").evaluate_all("""stamps => stamps.every(stamp => {
+      const row = stamp.closest('.transcript-line');
+      const box = stamp.getBoundingClientRect();
+      const text = row.querySelector('.transcript-text').getBoundingClientRect();
+      return box.left >= 0 && box.right <= text.left - 44 &&
+        (!row.classList.contains('transcript-time-row') ||
+          Math.abs(box.top - row.nextElementSibling.getBoundingClientRect().top) < 1);
+    })""")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    marker = page.locator(".transcript-marker:visible")
+    expect(marker).to_have_count(1)
+    expect(marker).to_have_attribute("aria-label", "2 theses using passages starting on this row")
+    screenshot_dir = Path("/tmp/sa-map-screenshots")
+    screenshot_dir.mkdir(exist_ok=True)
+    page.locator("[data-transcript-view]").screenshot(path=str(screenshot_dir / f"timestamp-margins-{width}.png"))
+    if width == 1440:
+        marker.hover()
+    else:
+        marker.tap()
+    expect(page.locator("#timestamp-example-menu a")).to_have_count(2)
+    page.keyboard.press("Escape")
+    # A linked turn starting at its timecode must read the spoken passage.
+    page.get_by_role("button", name="Turn on speed reading", exact=True).click()
+    expect(page.locator("[data-speed-reader-glance]")).to_have_text("The library is")
+    page.keyboard.press("Escape")
+    # Selection still chooses a different spoken starting point.
+    page.locator(".transcript-text").filter(has_text="We meet").evaluate("""element => {
+      const text = [...element.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent.includes('We meet'));
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+    }""")
+    page.get_by_role("button", name="Turn on speed reading", exact=True).click()
+    expect(page.locator("[data-speed-reader-glance]")).to_have_text("We meet at")
+    page.keyboard.press("Escape")
+    page.close()
+
+
+def test_speed_reader_skips_timecodes_throughout_playback(browser, mock_site):
+    from playwright.sync_api import expect
+    url, _ = mock_site
+    page = browser.new_page()
+    page.goto(url + "/discussions/#source=source-one")
+    unlock(page)
+    page.locator(".transcript-lines").wait_for()
+    raw = "00:01\nAlpha beta.\n~01:02:03\nGamma delta.\n[00:04] Meet at 12:30."
+    render_timestamp_example(page, raw)
+    page.clock.install()
+    page.get_by_role("button", name="Turn on speed reading", exact=True).click()
+    page.get_by_role("button", name="Decrease WPG", exact=True).click(click_count=2)
+    page.get_by_role("button", name="Play", exact=True).click()
+    for index, word in enumerate(["Alpha", "beta.", "Gamma", "delta.", "Meet", "at", "12:30."]):
+        if index:
+            page.clock.run_for(200)
+        expect(page.locator("[data-speed-reader-glance]")).to_have_text(word)
+    page.get_by_role("button", name="Lock archive", exact=True).click()
+    expect(page.locator(".transcript-timestamp")).to_have_count(0)
+    expect(page.locator("[data-speed-reader-glance]")).to_be_empty()
+    page.close()
+
+
+@pytest.mark.parametrize("raw, stamps, collapsed", [
+    ("00:01\n00:02\nSpeech.\n00:03", 3, 1),
+    ("00:01\n\nSpeech.\n", 1, 0),
+    ("[~01:02:03]\r\nSpeech.\r\n", 1, 1),
+    ("We meet at 12:30.\n12:30 is our meeting time.\n[00:99] Invalid time.\n", 0, 0),
+])
+def test_timestamp_layout_edge_cases(browser, mock_site, raw, stamps, collapsed):
+    from playwright.sync_api import expect
+    url, _ = mock_site
+    page = browser.new_page()
+    page.goto(url + "/discussions/#source=source-one")
+    unlock(page)
+    page.locator(".transcript-lines").wait_for()
+    render_timestamp_example(page, raw)
+    expect(page.locator(".transcript-timestamp")).to_have_count(stamps)
+    expect(page.locator(".transcript-time-row")).to_have_count(collapsed)
+    assert page.locator(".transcript-text").evaluate_all("rows => rows.map(r => r.textContent).join('\\n')") == raw
+    boxes = page.locator(".transcript-timestamp").evaluate_all("stamps => stamps.map(s => { const r = s.getBoundingClientRect(); return {top:r.top, bottom:r.bottom}; })")
+    assert all(first["bottom"] <= second["top"] + 1 for first, second in zip(boxes, boxes[1:]))
+    page.close()
+
+
 def test_link_preview_is_available_without_javascript_or_unlocking(browser, mock_site):
     from playwright.sync_api import expect
     url, _ = mock_site
