@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" prefix="og: https://ogp.me/ns# article: https://ogp.me/ns/article#">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ site.title }}{% endblock %}</title>
     <meta name="color-scheme" content="light">
+    {% include "partials/sharing.html" %}
     <link rel="stylesheet" href="/assets/css/styles.css">
     <link rel="stylesheet" href="/assets/katex/katex.min.css">
     {% block head %}{% endblock %}

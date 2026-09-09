@@ -23,3 +23,6 @@ The Structural Map, extraction skill, encrypted session archive, and automated
 checks are documented in [`docs/structural-map.md`](docs/structural-map.md).
 Readable session material stays under ignored `data/*`; only `encrypted/` is
 published. Probability inference is deferred.
+
+Public sharing metadata, preview artwork and site icons are documented in
+[`docs/link-previews.md`](docs/link-previews.md).
