@@ -44,6 +44,7 @@ def mock_site(tmp_path_factory):
     discussion.mkdir(parents=True)
     (discussion / "mock-discussion.md").write_text("A fictional discussion used to test the existing speed reader.")
     (discussion / "mock-discussion.toml").write_text('title = "Fictional discussion"\ndate_published = "2026-01-01"\n')
+    (root / "site_config.toml").write_text('[site]\nbase_url = "https://example.test"\n')
     pack(root, root / "encrypted", MOCK_PASSKEY)
     build(root, root / "dist")
 
@@ -452,4 +453,23 @@ def test_transcript_reader_keeps_words_whole_at_provenance_boundaries(browser, m
     page.keyboard.press("Escape")
     expect(page.locator(".transcript-highlight")).to_have_text("de")
     assert page.locator(".transcript-text").evaluate_all("rows => rows.map(r => r.textContent).join('\\n')") == raw
+    page.close()
+
+
+def test_link_preview_is_available_without_javascript_or_unlocking(browser, mock_site):
+    from playwright.sync_api import expect
+    url, _ = mock_site
+    page = browser.new_page(java_script_enabled=False)
+    requests = []
+    page.on("request", lambda request: requests.append(request.url))
+    page.goto(url + "/discussions/#source=source-one&start=0&stop=10")
+    expect(page.locator('meta[property="og:title"]')).to_have_attribute("content", "Discussions | Structured Anarchy")
+    expect(page.locator('meta[property="og:url"]')).to_have_attribute("content", "https://example.test/discussions/")
+    head = page.locator("head").inner_html()
+    assert "garden" not in head and "source-one" not in head and MOCK_PASSKEY not in head
+    assert not any(request.endswith(".bin") for request in requests)
+    response = page.request.get(url + "/assets/brand/social-card.png")
+    assert response.status == 200 and response.headers["content-type"].startswith("image/png")
+    assert page.request.get(url + "/favicon.ico").status == 200
+    assert page.request.get(url + "/assets/brand/icon.svg").headers["content-type"].startswith("image/svg+xml")
     page.close()

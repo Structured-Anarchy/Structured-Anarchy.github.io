@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Public link-preview artwork</title>
+  <style>
+    @font-face { font-family: Cormorant; src: url("{{ font_regular }}"); font-weight: 400; }
+    @font-face { font-family: Cormorant; src: url("{{ font_semibold }}"); font-weight: 600; }
+    * { box-sizing: border-box; }
+    body { margin: 0; width: 1200px; height: 630px; background: #fbfaf5; color: #24231f; font-family: Cormorant, serif; }
+    main { position: relative; height: 100%; padding: 64px 76px; }
+    main::before { content: ""; position: absolute; inset: 26px; border: 1px solid #d7d4ca; }
+    .kicker { margin: 0 0 30px; font-size: 20px; letter-spacing: 5px; color: #6f6c63; }
+    h1 { max-width: 790px; margin: 0; font-size: 112px; line-height: 0.93; font-weight: 600; letter-spacing: -2px; }
+    .description { margin: 34px 0 0; max-width: 960px; font-size: 31px; line-height: 1.25; }
+    img { position: absolute; top: 66px; right: 76px; width: 154px; height: 154px; }
+    footer { position: absolute; bottom: 62px; left: 76px; right: 76px; padding-top: 20px; border-top: 1px solid #d7d4ca; font-size: 23px; color: #6f6c63; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="kicker">A SHARED INQUIRY</p>
+    <h1>{{ site.title }}</h1>
+    <img src="{{ icon }}" alt="">
+    <p class="description">{{ site.description }}</p>
+    <footer>{{ domain }}</footer>
+  </main>
+</body>
+</html>

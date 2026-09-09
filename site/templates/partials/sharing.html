@@ -1,0 +1,30 @@
+    <meta name="application-name" content="{{ site.title }}">
+    <meta name="theme-color" content="#fbfaf5">
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="icon" href="/assets/brand/icon-32.png" type="image/png" sizes="32x32">
+    <link rel="icon" href="/assets/brand/icon.svg" type="image/svg+xml" sizes="any">
+    <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" sizes="180x180">
+    {% if sharing %}
+    <meta name="description" content="{{ sharing.description }}">
+    {% if sharing.noindex %}<meta name="robots" content="noindex, follow">{% endif %}
+    <meta property="og:title" content="{{ sharing.title }}">
+    <meta property="og:description" content="{{ sharing.description }}">
+    <meta property="og:site_name" content="{{ site.title }}">
+    <meta property="og:type" content="{{ sharing.type }}">
+    <meta property="og:locale" content="en_GB">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ sharing.title }}">
+    <meta name="twitter:description" content="{{ sharing.description }}">
+    {% if sharing.url %}
+    <link rel="canonical" href="{{ sharing.url }}">
+    <meta property="og:url" content="{{ sharing.url }}">
+    <meta property="og:image" content="{{ sharing.image }}">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{{ sharing.image_alt }}">
+    <meta name="twitter:image" content="{{ sharing.image }}">
+    <meta name="twitter:image:alt" content="{{ sharing.image_alt }}">
+    {% endif %}
+    {% if sharing.published %}<meta property="article:published_time" content="{{ sharing.published }}">{% endif %}
+    {% endif %}

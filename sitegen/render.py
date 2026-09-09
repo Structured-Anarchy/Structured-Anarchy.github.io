@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import date
 import json
 import shutil
 
@@ -8,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .content import ContentError, SiteData, Writing
 from .vault import copy_encrypted
+from .sharing import share_metadata
 
 
 def build_site(data: SiteData, root: Path, output: Path) -> None:
@@ -36,11 +38,24 @@ def build_site(data: SiteData, root: Path, output: Path) -> None:
     env.globals["private_available"] = private_available
     env.globals["discussion_notes"] = data.discussions
 
-    render_page(env, output / "index.html", "landing.html", active="home")
-    render_page(env, output / "structural-map" / "index.html", "structural_map.html", active="structural-map")
-    render_page(env, output / "symbols-and-meaning" / "index.html", "symbols.html", active="symbols")
+    render_page(env, output / "index.html", "landing.html", page_path="/", active="home")
+    render_page(
+        env, output / "structural-map" / "index.html", "structural_map.html", active="structural-map",
+        page_path="/structural-map/", page_title=f"Structural Map | {data.config.title}",
+        description="Explore how our theses connect through supporting and refuting arguments. "
+                    "Session content is available to the group after unlocking.",
+    )
+    render_page(
+        env, output / "symbols-and-meaning" / "index.html", "symbols.html", active="symbols",
+        page_path="/symbols-and-meaning/", page_title=f"Symbols and Meaning | {data.config.title}",
+        description="Explore our symbols, their meanings, and the passages that define them. "
+                    "Session content is available to the group after unlocking.",
+    )
     render_writing_section(env, output, "discussions", "Discussions", data.discussions)
-    render_page(env, output / "404.html", "404.html", active="")
+    render_page(
+        env, output / "404.html", "404.html", page_path="/404.html", active="",
+        page_title=f"Page not found | {data.config.title}", noindex=True,
+    )
     write_manifest(output, data)
 
 
@@ -60,6 +75,9 @@ def copy_static_assets(root: Path, output: Path) -> None:
     site_assets = root / "site" / "assets"
     if site_assets.exists():
         shutil.copytree(site_assets, output / "assets", dirs_exist_ok=True)
+    favicon = site_assets / "brand" / "favicon.ico"
+    if favicon.exists():
+        shutil.copy2(favicon, output / "favicon.ico")
     for legacy_dir in [root / "assets" / "img", root / "assets" / "pdf"]:
         if legacy_dir.exists():
             shutil.copytree(legacy_dir, output / "assets" / legacy_dir.name, dirs_exist_ok=True)
@@ -81,9 +99,15 @@ def copy_writing_assets(root: Path, output: Path, writings: list[Writing]) -> No
             shutil.copy2(path, destination)
 
 
-def render_page(env: Environment, path: Path, template: str, **context) -> None:
+def render_page(
+    env: Environment, path: Path, template: str, *, page_path: str,
+    page_title: str = "", description: str = "", published: date | None = None,
+    noindex: bool = False, **context,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    html = env.get_template(template).render(**context)
+    site = env.globals["site"]
+    sharing = share_metadata(site, page_path, page_title or site.title, description, published, noindex)
+    html = env.get_template(template).render(sharing=sharing, **context)
     path.write_text(html, encoding="utf-8")
 
 
@@ -94,6 +118,10 @@ def render_writing_section(
         env,
         output / section / "index.html",
         "writing_index.html",
+        page_path=f"/{section}/",
+        page_title=f"{title} | {env.globals['site'].title}",
+        description="Read our philosophy discussions and follow passages into the structural map. "
+                    "Session transcripts are available to the group after unlocking.",
         active=section,
         section=section,
         title=title,
@@ -104,6 +132,10 @@ def render_writing_section(
             env,
             output / section / item.slug / "index.html",
             "writing_detail.html",
+            page_path=f"/{section}/{item.slug}/",
+            page_title=f"{item.title} | {env.globals['site'].title}",
+            description=item.excerpt,
+            published=item.date_published,
             active=section,
             section=section,
             title=title,

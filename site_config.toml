@@ -1,5 +1,6 @@
 [site]
 title = "Structured Anarchy"
+description = "A philosophy club for shared inquiry. Explore discussions, arguments, and the meanings behind our words."
 base_url = "https://structured-anarchy.github.io"
 membership_form_url = ""
 

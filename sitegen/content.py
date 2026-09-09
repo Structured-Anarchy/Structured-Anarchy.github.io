@@ -39,6 +39,7 @@ class SiteConfig:
     base_url: str = ""
     membership_form_url: str = ""
     giscus: GiscusConfig = field(default_factory=GiscusConfig)
+    description: str = "A philosophy club for shared inquiry. Explore discussions, arguments, and the meanings behind our words."
 
 
 @dataclass
@@ -189,6 +190,7 @@ def load_config(root: Path, production: bool = False) -> SiteConfig:
         title=str(site_data.get("title", "Structured Anarchy")),
         base_url=str(site_data.get("base_url", "")),
         membership_form_url=str(site_data.get("membership_form_url", "")),
+        description=str(site_data.get("description", SiteConfig().description)),
         giscus=GiscusConfig(
             repo=str(giscus_data.get("repo", "")),
             repo_id=str(giscus_data.get("repo_id", "")),
