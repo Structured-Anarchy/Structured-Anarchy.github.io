@@ -175,10 +175,11 @@
 
   function initSpeedReader() {
     var root = document.querySelector("[data-speed-reader]");
-    var source = document.querySelector(".writing-detail .prose");
+    var source = document.querySelector(".writing-detail .prose, [data-passage-source]");
     var stage = document.querySelector("[data-speed-reader-stage]");
     var glance = document.querySelector("[data-speed-reader-glance]");
     if (!root || !source || !stage || !glance) return;
+    var readerHome = root.parentElement;
 
     var panelToggle = root.querySelector("[data-speed-reader-panel-toggle]");
     var panel = root.querySelector("[data-speed-reader-panel]");
@@ -201,7 +202,7 @@
     var playButton = root.querySelector("[data-speed-reader-play]");
     var pauseButton = root.querySelector("[data-speed-reader-pause]");
     var forwardButton = root.querySelector("[data-speed-reader-forward]");
-    var panelToggleIcon = panelToggle.querySelector("span");
+    var panelToggleIcon = panelToggle && panelToggle.querySelector("span");
     if (
       !panelToggle ||
       !panel ||
@@ -250,11 +251,40 @@
     syncControls();
     renderGlance();
 
-    if (!tokens.length) {
-      panelToggle.disabled = true;
-      enabledInput.disabled = true;
-      return;
-    }
+    panelToggle.disabled = !tokens.length;
+    enabledInput.disabled = !tokens.length;
+    root.hidden = !tokens.length;
+
+    document.addEventListener("sa:reader-source", function () {
+      clearTimer();
+      clearReturnHighlight();
+      state.enabled = false;
+      state.playing = false;
+      state.index = 0;
+      lastSelectionIndex = null;
+      // The same controls follow the active source into the modal top layer or
+      // back to the page. Never retain decrypted text from a previous view.
+      source = document.querySelector("dialog[open] [data-passage-source]") ||
+        document.querySelector("[data-transcript-source]") ||
+        document.querySelector(".writing-detail .prose");
+      var host = document.querySelector("[data-evidence-dialog][open]") || readerHome;
+      host.appendChild(root);
+      host.appendChild(stage);
+      tokens = collectSpeedReaderTokens(source);
+      tokenIndexesByNode = indexSpeedReaderTokensByNode(tokens);
+      var linkedPassage = source && source.querySelector(".transcript-highlight");
+      if (linkedPassage) {
+        var linkedIndex = tokens.findIndex(function (token) { return token.nodes.some(function (node) { return linkedPassage.contains(node); }); });
+        if (linkedIndex >= 0) state.index = linkedIndex;
+      }
+      addSpeedReaderBlurTargets(source);
+      panelToggle.disabled = !tokens.length;
+      enabledInput.disabled = !tokens.length;
+      root.hidden = !tokens.length;
+      setPanelOpen(false);
+      syncControls();
+      renderGlance();
+    });
 
     panelToggle.addEventListener("pointerdown", rememberSourceSelection, true);
     panelToggle.addEventListener("click", function () {
@@ -263,7 +293,8 @@
 
     document.addEventListener("pointerdown", function (event) {
       if (!state.panelOpen || root.contains(event.target)) return;
-      setEnabled(false);
+      // Do not scroll the clicked link/button away before its click fires.
+      setEnabled(false, false);
     });
 
     document.addEventListener("selectionchange", function () {
@@ -393,7 +424,7 @@
       }
     }
 
-    function setEnabled(enabled) {
+    function setEnabled(enabled, returnToSource) {
       var returnIndex = state.index;
       state.enabled = enabled;
       if (enabled) {
@@ -407,7 +438,7 @@
       syncControls();
       renderGlance();
       scheduleNext();
-      if (!enabled) {
+      if (!enabled && returnToSource !== false) {
         returnToSourceGlance(returnIndex);
       }
     }
@@ -466,6 +497,10 @@
       document.body.classList.toggle("speed-reading-active", state.enabled);
       stage.hidden = !state.enabled;
       stage.style.setProperty("--speed-reader-font-size", state.fontSize + "px");
+      var context = stage.querySelector("[data-speed-reader-context]");
+      var token = tokens[state.index];
+      var passage = token && token.node.parentElement.closest("[data-passage-label]");
+      if (context) context.textContent = state.enabled && passage ? passage.dataset.passageLabel : "";
       if (!state.enabled) {
         glance.textContent = "";
         return;
@@ -743,7 +778,7 @@
     }
 
     function nodeInsideSource(node) {
-      if (!node) return false;
+      if (!node || !source) return false;
       if (node === source) return true;
       var element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
       return !!element && source.contains(element);
@@ -762,7 +797,7 @@
       var indexes = tokenIndexesByNode.get(range.startContainer);
       if (!indexes || !indexes.length) return null;
       for (var offsetIndex = 0; offsetIndex < indexes.length; offsetIndex += 1) {
-        if (tokens[indexes[offsetIndex]].end > range.startOffset) {
+        if (tokens[indexes[offsetIndex]].endNode !== range.startContainer || tokens[indexes[offsetIndex]].end > range.startOffset) {
           return indexes[offsetIndex];
         }
       }
@@ -774,6 +809,10 @@
       if (!range) return;
       var rect = unionRangeRect(range);
       if (!rect) return;
+      if (source.closest("dialog")) {
+        range.startContainer.parentElement.scrollIntoView({ block: "center" });
+        return;
+      }
       var targetTop = window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2;
       window.scrollTo({
         top: Math.max(0, targetTop),
@@ -793,7 +832,7 @@
       if (!first || !last) return null;
       var range = document.createRange();
       range.setStart(first.node, first.start);
-      range.setEnd(last.node, last.end);
+      range.setEnd(last.endNode, last.end);
       return range;
     }
 
@@ -852,13 +891,15 @@
 
   function collectSpeedReaderTokens(source) {
     var tokens = [];
+    if (!source) return tokens;
+    var previousNode = null;
     var walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT, {
       acceptNode: function (node) {
         var parent = node.parentElement;
-        if (!parent || !node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-        if (parent.closest("script, style, textarea, input, button")) return NodeFilter.FILTER_REJECT;
+        if (!parent || !node.nodeValue) return NodeFilter.FILTER_REJECT;
+        if (parent.closest("script, style, textarea, input, button, [data-reader-skip]")) return NodeFilter.FILTER_REJECT;
         if (parent.closest(".katex-mathml, math, semantics, annotation")) return NodeFilter.FILTER_REJECT;
-        if (!parent.closest("h2, h3, h4, h5, h6, p, li, blockquote, figcaption")) {
+        if (!parent.closest("h2, h3, h4, h5, h6, p, li, blockquote, figcaption, .transcript-text")) {
           return NodeFilter.FILTER_REJECT;
         }
         return NodeFilter.FILTER_ACCEPT;
@@ -869,14 +910,23 @@
       var pattern = /\S+/g;
       var match = pattern.exec(node.nodeValue);
       while (match) {
-        tokens.push({
-          text: match[0],
-          node: node,
-          start: match.index,
-          end: match.index + match[0].length
+        var line = node.parentElement.closest(".transcript-text");
+        var previous = tokens[tokens.length - 1];
+        // Provenance anchors and highlighting can divide a word across text
+        // nodes. Read it once as a word without modifying the source DOM.
+        if (match.index === 0 && line && previous && previousNode &&
+            line.contains(previousNode) && /\S$/.test(previousNode.nodeValue)) {
+          previous.text += match[0];
+          previous.endNode = node;
+          previous.end = match[0].length;
+          previous.nodes.push(node);
+        } else tokens.push({
+          text: match[0], node: node, endNode: node, nodes: [node],
+          start: match.index, end: match.index + match[0].length
         });
         match = pattern.exec(node.nodeValue);
       }
+      previousNode = node;
       node = walker.nextNode();
     }
     return tokens;
@@ -885,23 +935,26 @@
   function indexSpeedReaderTokensByNode(tokens) {
     var indexesByNode = new Map();
     tokens.forEach(function (token, index) {
-      var indexes = indexesByNode.get(token.node);
-      if (!indexes) {
-        indexes = [];
-        indexesByNode.set(token.node, indexes);
-      }
-      indexes.push(index);
+      token.nodes.forEach(function (node) {
+        var indexes = indexesByNode.get(node);
+        if (!indexes) {
+          indexes = [];
+          indexesByNode.set(node, indexes);
+        }
+        indexes.push(index);
+      });
     });
     return indexesByNode;
   }
 
   function addSpeedReaderBlurTargets(source) {
+    if (!source) return;
     var header = document.querySelector(".writing-header");
     var comments = document.querySelector(".comments");
     if (header) header.classList.add("speed-reader-blur-target");
     if (comments) comments.classList.add("speed-reader-blur-target");
     Array.prototype.slice.call(
-      source.querySelectorAll("h2, h3, h4, h5, h6, p, li, blockquote, pre, table")
+      source.querySelectorAll("h2, h3, h4, h5, h6, p, li, blockquote, pre, table, .transcript-text")
     ).forEach(function (element) {
       if (element.querySelector("img, picture, video, canvas")) return;
       element.classList.add("speed-reader-blur-target");
@@ -920,7 +973,7 @@
   function rangeIntersectsToken(range, token) {
     try {
       return (
-        range.comparePoint(token.node, token.end) >= 0 &&
+        range.comparePoint(token.endNode, token.end) >= 0 &&
         range.comparePoint(token.node, token.start) <= 0
       );
     } catch (error) {

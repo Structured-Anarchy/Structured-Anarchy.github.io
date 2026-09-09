@@ -18,3 +18,8 @@ equivalent existing environment.
 
 Member and discussion formats are documented in
 [`docs/content-guide.md`](docs/content-guide.md).
+
+The Structural Map, extraction skill, encrypted session archive, and automated
+checks are documented in [`docs/structural-map.md`](docs/structural-map.md).
+Readable session material stays under ignored `data/*`; only `encrypted/` is
+published. Probability inference is deferred.

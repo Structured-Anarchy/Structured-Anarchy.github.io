@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Structural Map | {{ site.title }}{% endblock %}
+{% block body_class %}structural-map-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="/assets/css/structural-map.css">{% endblock %}
+{% block content %}
+  {% set archive_title = "Structural Map" %}
+  {% set archive_description = "Follow our theses, the arguments around them, and what we mean by our words." %}
+  {% include "partials/archive.html" %}
+{% endblock %}
+{% block scripts %}
+  <script type="module" src="/assets/js/structural-map.js"></script>
+{% endblock %}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Extract theses and logical structure"
+  short_description: "Map session arguments and meanings with exact provenance"
+  default_prompt: "Use $extract-theses-and-logical-structure to update the existing knowledge base from the selected refined transcript and validate every passage pointer."

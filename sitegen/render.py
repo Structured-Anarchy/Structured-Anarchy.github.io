@@ -6,7 +6,8 @@ import shutil
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from .content import ContentError, Member, SiteData, Writing
+from .content import ContentError, SiteData, Writing
+from .vault import copy_encrypted
 
 
 def build_site(data: SiteData, root: Path, output: Path) -> None:
@@ -20,7 +21,10 @@ def build_site(data: SiteData, root: Path, output: Path) -> None:
     output.mkdir(parents=True)
     (output / ".nojekyll").write_text("", encoding="utf-8")
     copy_static_assets(root, output)
-    copy_member_images(output, data.members)
+    try:
+        private_available = copy_encrypted(root, output)
+    except (ValueError, OSError) as exc:
+        raise ContentError(f"invalid encrypted archive: {exc}") from exc
     copy_writing_assets(root, output, data.discussions)
 
     env = Environment(
@@ -29,16 +33,13 @@ def build_site(data: SiteData, root: Path, output: Path) -> None:
     )
     env.filters["date_long"] = lambda value: value.strftime("%B %-d, %Y")
     env.globals["site"] = data.config
+    env.globals["private_available"] = private_available
+    env.globals["discussion_notes"] = data.discussions
 
     render_page(env, output / "index.html", "landing.html", active="home")
+    render_page(env, output / "structural-map" / "index.html", "structural_map.html", active="structural-map")
+    render_page(env, output / "symbols-and-meaning" / "index.html", "symbols.html", active="symbols")
     render_writing_section(env, output, "discussions", "Discussions", data.discussions)
-    render_page(
-        env,
-        output / "members" / "index.html",
-        "members.html",
-        active="members",
-        members=data.members,
-    )
     render_page(env, output / "404.html", "404.html", active="")
     write_manifest(output, data)
 
@@ -62,13 +63,6 @@ def copy_static_assets(root: Path, output: Path) -> None:
     for legacy_dir in [root / "assets" / "img", root / "assets" / "pdf"]:
         if legacy_dir.exists():
             shutil.copytree(legacy_dir, output / "assets" / legacy_dir.name, dirs_exist_ok=True)
-
-
-def copy_member_images(output: Path, members: list[Member]) -> None:
-    target = output / "assets" / "members"
-    target.mkdir(parents=True, exist_ok=True)
-    for member in members:
-        shutil.copy2(member.image_path, target / member.image_path.name)
 
 
 def copy_writing_assets(root: Path, output: Path, writings: list[Writing]) -> None:
@@ -119,7 +113,6 @@ def render_writing_section(
 
 def write_manifest(output: Path, data: SiteData) -> None:
     manifest = {
-        "members": [member.slug for member in data.members],
         "discussions": [item.slug for item in data.discussions],
     }
     (output / "site-manifest.json").write_text(
