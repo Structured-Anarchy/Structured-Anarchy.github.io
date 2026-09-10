@@ -1,6 +1,6 @@
 # Structural Map and private session content
 
-The Structural Map stores one shared argument graph across sessions. Theses are entry points into ordinary propositions; conjunctions of premises support or refute one signed proposition. Reused premises keep their identity across views. Probability inference is deliberately absent until its semantics are settled.
+The Structural Map stores one shared argument graph across sessions. Theses are entry points into ordinary propositions; conjunctions of premises support or refute one signed proposition. Reused premises keep their identity across views. [Component-wise maximum-entropy inference](probability-inference.md) computes model probabilities separately from extraction, using the agreed clause and leaf priors.
 
 Session extraction is separate from site generation; the fictional graph used in tests is never published as group content. The Discussions index displays the encrypted session catalogue and full transcripts only after unlocking, alongside any public discussion notes.
 
@@ -24,7 +24,7 @@ Transcript views omit the leading refinement-export title and source-filename pa
 
 `/symbols-and-meaning/` lists all symbols by descending meaning count by default, with alphabetical tie-breaking; alphabetical sorting is also available. Hovering or selecting a symbol opens an interactive popup listing all its meanings; declared meanings link to their defining passages and exact transcript positions. Undeclared default meanings are counted but explicitly have no definition passage. The same distinction and popup flow are used in the argument explorer.
 
-Thesis counts traverse all incoming support/refutation clauses recursively, counting each clause once and stopping at shared nodes and cycles. Session totals use assertion and literal evidence across every reachable atom. Green/red totals describe each clause's local signed consequent, not its propagated effect on the root. The index can be sorted by topic, support count or refute count.
+Thesis counts traverse all incoming support/refutation clauses recursively, counting each clause once and stopping at shared nodes and cycles. Session totals use assertion and literal evidence across every reachable atom. Green/red totals describe each clause's local signed consequent, not its propagated effect on the root. The index can be sorted by topic, support count, refute count or model probability in either direction. Probabilities appear beside counts and inside atom circles; selecting a circle's value explains its assumptions. Negated views display the complementary probability.
 
 “Also used in … theses” links to other thesis entry points whose recursive graphs contain the atom. It excludes the current thesis, the atom itself and non-thesis intermediate claims, deduplicating shared paths and cycles.
 
@@ -40,6 +40,7 @@ Run commands from the repository root in the required environment:
 conda run -n structured_anarchy_py pip install -r requirements.txt
 conda run -n structured_anarchy_py python scripts/knowledge.py unpack
 conda run -n structured_anarchy_py python scripts/knowledge.py validate
+conda run -n structured_anarchy_py python scripts/knowledge.py infer
 conda run -n structured_anarchy_py python scripts/knowledge.py pack
 conda run -n structured_anarchy_py python scripts/knowledge.py verify-encrypted
 conda run -n structured_anarchy_py python scripts/build_site.py
@@ -52,7 +53,7 @@ Source offsets count Unicode codepoints from decoded bytes, starting at zero, wi
 
 ## Extraction skill
 
-The versioned skill is [extract-theses-and-logical-structure](../skills/extract-theses-and-logical-structure/SKILL.md). Its references explain the schema, logical review procedure and fictional two-session example. Each clause needs both source warrant and a separate logical-completeness check. Atoms express one direct, independently contestable assertion; empirical assertions need conceivable disconfirmation, while norms and definitions need clear grounds for disagreement. Remove each premise in turn to check that it is necessary, not just contextual padding. Review must cover support and refutation for every atom, including induced premises, with a private coverage ledger. The additive version-1 schema permits an essential induced premise only with empty assertion origins, separately named induction context, a rationale and the IDs of clauses using it. Every clause still needs at least one genuinely sourced premise; all-induced antecedents and fabricated asserted occurrences are rejected. Probability inference remains deferred.
+The versioned skill is [extract-theses-and-logical-structure](../skills/extract-theses-and-logical-structure/SKILL.md). Its references explain the schema, logical review procedure and fictional two-session example. Each clause needs both source warrant and a separate logical-completeness check. Atoms express one direct, independently contestable assertion; empirical assertions need conceivable disconfirmation, while norms and definitions need clear grounds for disagreement. Remove each premise in turn to check that it is necessary, not just contextual padding. Review must cover support and refutation for every atom, including induced premises, with a private coverage ledger. The additive version-1 schema permits an essential induced premise only with empty assertion origins, separately named induction context, a rationale and the IDs of clauses using it. Every clause still needs at least one genuinely sourced premise; all-induced antecedents and fabricated asserted occurrences are rejected. Probability inference is a separate derived export, never an extraction or provenance field.
 
 To register it in a local Codex skills directory, create a symlink named `extract-theses-and-logical-structure` pointing to this checkout's `skills/extract-theses-and-logical-structure` directory. Then invoke `$extract-theses-and-logical-structure` with the refined session filename. The symlink itself is machine-local, not a repository artifact.
 

@@ -4,6 +4,10 @@ export function createGraphModel(kb) {
   const incoming = new Map(), outgoing = new Map(), assertions = new Map();
   const sessionsByFile = new Map();
   const sources = new Map(kb.sources.map(s => [s.id, s]));
+  function probability(id, negated = false) {
+    const value = kb.inference?.probabilities?.[id];
+    return Number.isFinite(value) && value >= 0 && value <= 1 ? (negated ? 1 - value : value) : null;
+  }
   for (const session of kb.sessions) for (const id of session.source_ids) {
     const name = sources.get(id)?.file_name;
     if (!sessionsByFile.has(name)) sessionsByFile.set(name, new Set());
@@ -67,12 +71,21 @@ export function createGraphModel(kb) {
     return kb.propositions.filter(p => p.thesis && p.id !== currentThesisId && p.id !== id && descendants(p.id).atoms.has(id))
       .sort((a, b) => a.text.localeCompare(b.text) || a.id.localeCompare(b.id));
   }
-  return { incoming, outgoing, descendants, transcriptMarkers, otherTheses,
+  return { incoming, outgoing, descendants, transcriptMarkers, otherTheses, probability,
     assertionOrigins: id => [...(assertions.get(id)?.values() || [])] };
 }
 
 export function sortedTheses(theses, mode, model) {
   const alphabetical = (a, b) => a.text.localeCompare(b.text) || a.id.localeCompare(b.id);
+  if (mode === "probability-desc" || mode === "probability-asc") {
+    const direction = mode === "probability-asc" ? 1 : -1;
+    return [...theses].sort((a, b) => {
+      const pa = model.probability(a.id), pb = model.probability(b.id);
+      // Missing estimates sort last in both directions, never as zero.
+      if (pa === null || pb === null) return (pa === null) - (pb === null) || alphabetical(a, b);
+      return direction * (pa - pb) || alphabetical(a, b);
+    });
+  }
   return [...theses].sort((a, b) => mode === "support" || mode === "refute"
     ? model.descendants(b.id)[mode] - model.descendants(a.id)[mode] || alphabetical(a, b)
     : a.topics.join(" · ").localeCompare(b.topics.join(" · ")) || alphabetical(a, b));

@@ -62,7 +62,11 @@ html[data-theme="dark"] .statement-symbol > span { text-decoration-color: var(--
 .support-segment { fill: #588367; }
 .refute-segment { fill: #b36359; }
 .atom-center { position: absolute; inset: 17%; border: 1px solid var(--line); border-radius: 50%; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0.3rem; background: radial-gradient(circle, rgba(var(--panel-rgb), 0.5), transparent); }
-.atom-mark { color: var(--muted); font-size: 2.3rem; }
+.structural-map .atom-probability { display: flex; flex-direction: column; align-items: center; border: 0; border-radius: 0.4rem; padding: 0.3rem 0.5rem; min-height: 44px; }
+.probability-caption { color: var(--muted); font-size: 0.85rem; }
+.probability-value { font-size: 2rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.probability-detail { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.thesis-probability { color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .atom-center .map-note { font-size: 0.85rem; }
 .other-uses { font-size: 1rem; text-align: left; max-width: 24rem; margin: 1rem auto; }
 .other-uses summary { cursor: pointer; color: var(--muted); text-align: center; }
@@ -91,7 +95,7 @@ html[data-theme="dark"] .statement-symbol > span { text-decoration-color: var(--
 .thesis-controls label { color: var(--muted); font-size: 0.95rem; }
 .thesis-controls input, .thesis-controls select { display: block; margin: 0.4rem 0 0; min-height: 44px; }
 .thesis-controls select { font: inherit; background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 0.65rem; max-width: 100%; }
-.clause-counts { white-space: normal; }
+.clause-counts { white-space: normal; max-width: 22rem; text-align: right; }
 .reconstruction-note { border-bottom: 1px solid var(--line); padding: 0.8rem 0; }
 .reconstruction-note summary, .induction-reason summary { cursor: pointer; color: var(--muted); }
 .argument-explanation { font-size: 1rem; }
@@ -134,6 +138,7 @@ html[data-theme="dark"] .transcript-marker { color: #89bd9b; }
   .structural-map { margin-top: 8vh; width: calc(100vw - 2rem); }
   .map-heading { margin-bottom: 2rem; }
   .structural-map .thesis-row { grid-template-columns: 1fr; }
+  .clause-counts { max-width: none; text-align: left; }
   .evidence-dialog { padding: 1rem; }
   .evidence-toolbar { top: -1rem; }
   .vault-input-row { flex-wrap: wrap; }

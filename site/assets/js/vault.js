@@ -55,6 +55,32 @@ export class ContentVault {
       const graph = this.catalog.graph;
       const knowledge = JSON.parse(decoder.decode(await this.resource(graph.asset, graph.sha256)));
       if (knowledge.schema_version !== 1) throw new Error("Unsupported knowledge version.");
+      if (this.catalog.inference) {
+        const entry = this.catalog.inference;
+        const inference = JSON.parse(decoder.decode(await this.resource(entry.asset, entry.sha256)));
+        const probabilities = inference.probabilities;
+        if (inference.version !== 1 || inference.model?.id !== "maxent-beta-v1" ||
+            inference.model.entropy_weight !== 1 ||
+            JSON.stringify(inference.model.clause_prior) !== "[7.2,1]" ||
+            JSON.stringify(inference.model.substantiated_leaf_prior) !== "[5,2]" ||
+            JSON.stringify(inference.model.induced_leaf_prior) !== "[1,1]" ||
+            inference.model.leaf_rule !== "used-as-premise-with-no-signed-incoming-clause" ||
+            inference.graph_sha256 !== graph.sha256 || !probabilities ||
+            Object.keys(probabilities).length !== knowledge.propositions.length ||
+            !knowledge.propositions.every(p => Object.hasOwn(probabilities, p.id) &&
+              Number.isFinite(probabilities[p.id]) && probabilities[p.id] >= 0 && probabilities[p.id] <= 1 &&
+              ["none", "induced-leaf", "substantiated-leaf"].includes(inference.priors?.[p.id])) ||
+            !Array.isArray(inference.components) ||
+            !inference.components.every(c => Array.isArray(c.atom_ids) && Array.isArray(c.clause_ids) &&
+              c.method === "exact-variable-elimination" && Number.isFinite(c.duality_gap) && c.duality_gap >= 0 && c.duality_gap <= 1e-10)) {
+          throw new Error("The probability export is invalid or does not match this graph.");
+        }
+        const componentAtoms = inference.components.flatMap(c => c.atom_ids);
+        if (componentAtoms.length !== knowledge.propositions.length || new Set(componentAtoms).size !== componentAtoms.length ||
+            !componentAtoms.every(id => Object.hasOwn(probabilities, id))) throw new Error("The probability components are incomplete.");
+        // Derived metadata is memory-only, never inserted into the authoring KB.
+        knowledge.inference = inference;
+      }
       return knowledge;
     } catch (error) {
       this.lock();

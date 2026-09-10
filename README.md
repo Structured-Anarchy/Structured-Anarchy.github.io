@@ -22,7 +22,8 @@ Member and discussion formats are documented in
 The Structural Map, extraction skill, encrypted session archive, and automated
 checks are documented in [`docs/structural-map.md`](docs/structural-map.md).
 Readable session material stays under ignored `data/*`; only `encrypted/` is
-published. Probability inference is deferred.
+published. Component-wise probability inference is documented in
+[`docs/probability-inference.md`](docs/probability-inference.md).
 
 Public sharing metadata, preview artwork and site icons are documented in
 [`docs/link-previews.md`](docs/link-previews.md).

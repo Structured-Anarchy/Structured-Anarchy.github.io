@@ -21,6 +21,10 @@ function button(text, action, className) {
   return node;
 }
 
+function probabilityText(value) {
+  return value === null ? "—" : value.toFixed(3);
+}
+
 function initialize() {
   const vault = new ContentVault(root.dataset.manifest);
   const content = root.querySelector("[data-map-content]");
@@ -225,11 +229,15 @@ function initialize() {
     const theses = sortedTheses(kb.propositions.filter(p => p.thesis && `${p.text} ${p.topics.join(" ")}`.toLocaleLowerCase().includes(query)), sort.value, model);
     for (const thesis of theses) {
       const row = button("", () => openProposition(thesis.id), "writing-row thesis-row");
+      row.dataset.thesis = thesis.id;
       row.append(element("span", thesis.text, "writing-title"));
       const counts = model.descendants(thesis.id);
       const meta = element("span", undefined, "writing-meta clause-counts");
       meta.append(element("span", `${counts.support} support`, "support-key"), document.createTextNode(" · "),
         element("span", `${counts.refute} refute`, "refute-key"), document.createTextNode(` · ${counts.sessions.size} sessions`));
+      const probability = element("span", `P = ${probabilityText(model.probability(thesis.id))}`, "thesis-probability");
+      probability.title = "Model probability of this thesis. Select its circle’s probability to view the assumptions.";
+      meta.append(document.createTextNode(" · "), probability);
       row.append(meta);
       row.append(element("span", thesis.topics.join(" · "), "writing-summary"));
       rows.append(row);
@@ -340,7 +348,13 @@ function initialize() {
     const argumentsHere = incoming.get(proposition.id) || [];
     const wheel = element("div", undefined, "argument-wheel");
     const center = element("div", undefined, "atom-center");
-    center.append(element("span", literal.negated ? "¬" : "·", "atom-mark"));
+    const probability = model.probability(proposition.id, literal.negated);
+    const estimate = button("", () => showProbability(proposition, literal.negated), "atom-probability");
+    estimate.append(element("span", literal.negated ? "P(¬atom)" : "P(atom)", "probability-caption"),
+      element("span", probabilityText(probability), "probability-value"));
+    estimate.setAttribute("aria-label", `Model probability of this ${literal.negated ? "negated " : ""}assertion: ${probabilityText(probability)}. Show assumptions`);
+    estimate.setAttribute("aria-haspopup", "dialog");
+    center.append(estimate);
     center.append(element("span", argumentsHere.length ? `${argumentsHere.length} argument${argumentsHere.length === 1 ? "" : "s"}` : "An open premise", "map-note"));
     wheel.append(center);
     if (previous >= 0) {
@@ -420,6 +434,29 @@ function initialize() {
     popupBack.hidden = !back;
     if (!dialog.open) dialog.showModal();
     return popupVersion;
+  }
+
+  function showProbability(proposition, negated) {
+    beginPopup("Model probability");
+    const probability = model.probability(proposition.id, negated);
+    popupBody.append(element("p", `${negated ? "¬(" : ""}${proposition.text}${negated ? ")" : ""}`),
+      element("p", `${negated ? "P(¬atom)" : "P(atom)"} = ${probabilityText(probability)}`, "probability-detail"));
+    if (probability === null) {
+      popupBody.append(element("p", "No computed probability is included in this archive. This is not a probability of zero."));
+      return;
+    }
+    const prior = kb.inference.priors[proposition.id];
+    const group = kb.inference.components.find(c => c.atom_ids.includes(proposition.id));
+    const description = prior === "substantiated-leaf"
+      ? "Substantiated leaf premise: Beta(5, 2), a soft prior whose mode is 0.8."
+      : prior === "induced-leaf"
+        ? "Induced leaf premise: Beta(1, 1), a flat prior with no preference."
+        : "No explicit atom prior. This probability is derived from the whole connected component.";
+    popupBody.append(element("p", description),
+      element("p", "Every support and refutation clause uses Beta(7.2, 1). Joint entropy has weight 1; priors are applied once per unique leaf premise, not once per use."),
+      element("p", `Exact variable elimination over ${group.atom_ids.length} atoms and ${group.clause_ids.length} clauses. The numerical optimization’s duality gap is ${group.duality_gap.toExponential(1)}.`),
+      element("p", "These are model-derived estimates under the agreed priors, not proof or measured truth frequencies. A substantiating passage records an assertion; it does not establish that the assertion is true.", "map-note"));
+    if (negated) popupBody.append(element("p", `The circle shows the negated assertion: 1 − P(atom), where P(atom) = ${probabilityText(model.probability(proposition.id))}.`));
   }
 
   function showMeanings(binding) {

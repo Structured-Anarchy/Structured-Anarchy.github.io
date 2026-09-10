@@ -1,4 +1,5 @@
 import json
+import base64
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,8 @@ from cryptography.exceptions import InvalidTag
 from scripts.make_mock_knowledge import write_mock
 from sitegen.knowledge import DEFAULT_KNOWLEDGE, digest
 from sitegen.vault import copy_encrypted, decrypt_archive, pack, unpack, validate_envelope
+from sitegen.vault import derive_key, json_bytes, seal, unseal
+from sitegen.inference import InferenceError, validate_inference
 
 MOCK_PASSKEY = "fictional test credential — not the group passkey"
 
@@ -84,3 +87,65 @@ def test_repack_does_not_retain_old_assets(archive):
     second = set(validate_envelope(archive / "encrypted")["assets"])
     assert not first & second
     decrypt_archive(archive / "encrypted", MOCK_PASSKEY)
+
+
+def edit_encrypted_catalog(archive, edit):
+    """Authenticated fictional fixtures: exercise checks beyond ciphertext hashes."""
+    directory = archive / "encrypted"
+    manifest = validate_envelope(directory)
+    key = derive_key(MOCK_PASSKEY, base64.b64decode(manifest["salt"]))
+    catalog = json.loads(unseal(key, manifest["catalog"], (directory / manifest["catalog"]).read_bytes()))
+    def rewrite(name, value):
+        raw = json_bytes(value)
+        encrypted = seal(key, name, raw)
+        (directory / name).write_bytes(encrypted)
+        manifest["assets"][name] = digest(encrypted)
+        return digest(raw)
+    edit(catalog, directory, key, rewrite)
+    rewrite(manifest["catalog"], catalog)
+    (directory / "manifest.json").write_bytes(json_bytes(manifest))
+
+
+def test_probabilities_are_separate_encrypted_and_bound_to_authoring_graph(archive):
+    kb, files = decrypt_archive(archive / "encrypted", MOCK_PASSKEY)
+    def inspect(catalog, directory, key, rewrite):
+        entry = catalog["inference"]
+        report = json.loads(unseal(key, entry["asset"], (directory / entry["asset"]).read_bytes()))
+        assert report["graph_sha256"] == catalog["graph"]["sha256"]
+        assert len(report["probabilities"]) == len(kb["propositions"])
+        validate_inference(kb, report)
+    edit_encrypted_catalog(archive, inspect)
+    assert "inference" not in kb
+    assert b"probabilities" not in files[DEFAULT_KNOWLEDGE]
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda r: r.update(graph_sha256="0" * 64),
+    lambda r: r["probabilities"].update({next(iter(r["probabilities"])): .123}),
+    lambda r: r["components"][0].update(weights=[1.0] * len(r["components"][0]["weights"]), duality_gap=0),
+])
+def test_authenticated_but_invalid_probability_report_is_rejected(archive, mutation):
+    def edit(catalog, directory, key, rewrite):
+        entry = catalog["inference"]
+        report = json.loads(unseal(key, entry["asset"], (directory / entry["asset"]).read_bytes()))
+        mutation(report)
+        entry["sha256"] = rewrite(entry["asset"], report)
+    edit_encrypted_catalog(archive, edit)
+    with pytest.raises(InferenceError):
+        decrypt_archive(archive / "encrypted", MOCK_PASSKEY)
+
+
+def test_legacy_archive_without_probability_export_still_restores(archive):
+    edit_encrypted_catalog(archive, lambda catalog, *_: catalog.pop("inference"))
+    kb, _ = decrypt_archive(archive / "encrypted", MOCK_PASSKEY)
+    assert len(kb["propositions"]) == 8
+
+
+def test_failed_inference_preserves_previous_encrypted_export(archive, monkeypatch):
+    previous = {p.name: p.read_bytes() for p in (archive / "encrypted").iterdir()}
+    def fail(_):
+        raise InferenceError("Simulated solver failure")
+    monkeypatch.setattr("sitegen.vault.infer", fail)
+    with pytest.raises(InferenceError):
+        pack(archive, archive / "encrypted", MOCK_PASSKEY)
+    assert {p.name: p.read_bytes() for p in (archive / "encrypted").iterdir()} == previous
