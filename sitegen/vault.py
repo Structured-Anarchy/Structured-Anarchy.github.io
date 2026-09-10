@@ -22,6 +22,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from .knowledge import DEFAULT_KNOWLEDGE, digest, local_data_path, validate_knowledge, validate_local
 from .sessions import with_session_metadata
+from .inference import infer, validate_inference
 
 ITERATIONS = 600_000
 ASSET_RE = re.compile(r"^[a-f0-9]{32}\.bin$")
@@ -84,6 +85,10 @@ def validate_envelope(directory: Path) -> dict[str, Any]:
 
 def pack(root: Path, output: Path, passkey: str) -> dict[str, int]:
     kb = validate_local(root)
+    # Compute before touching the existing export. Failure must not publish a
+    # partial graph, stale probabilities, or a sampled approximation.
+    probabilities = infer(kb)
+    validate_inference(kb, probabilities)
     salt = os.urandom(16)
     key = derive_key(passkey, salt)
     assets: dict[str, bytes] = {}
@@ -106,7 +111,8 @@ def pack(root: Path, output: Path, passkey: str) -> dict[str, int]:
         raw.decode("utf-8")
         files.append({"file_name": name, **add(raw)})
     graph = add(json_bytes(kb))
-    catalog = add(json_bytes({"version": 1, "graph": graph, "files": files}))
+    inference = add(json_bytes(probabilities))
+    catalog = add(json_bytes({"version": 1, "graph": graph, "inference": inference, "files": files}))
     manifest = {
         "version": 1, "cipher": "AES-256-GCM", "kdf": "PBKDF2-SHA256",
         "iterations": ITERATIONS, "salt": base64.b64encode(salt).decode("ascii"),
@@ -158,6 +164,9 @@ def decrypt_archive(directory: Path, passkey: str) -> tuple[dict[str, Any], dict
     authoring = with_session_metadata(tomllib.loads(files[DEFAULT_KNOWLEDGE].decode("utf-8")), files.__getitem__)
     if authoring != kb:
         raise ValueError("encrypted authoring TOML differs from the rendered graph")
+    if "inference" in catalog:
+        entry = catalog["inference"]
+        validate_inference(kb, json.loads(decrypt(entry["asset"], entry["sha256"])))
     return kb, files
 
 

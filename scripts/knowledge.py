@@ -18,6 +18,7 @@ from cryptography.exceptions import InvalidTag
 
 from sitegen.knowledge import DEFAULT_KNOWLEDGE, KnowledgeError, digest, empty_knowledge, load_knowledge, local_data_path, make_origin, validate_local
 from sitegen.vault import decrypt_archive, pack, unpack, validate_envelope
+from sitegen.inference import infer, validate_inference
 
 
 def main() -> int:
@@ -38,6 +39,7 @@ def main() -> int:
     spans.add_argument("proposition_id")
     spans.add_argument("surface")
     commands.add_parser("validate", help="check schema, graph integrity, and every source pointer")
+    commands.add_parser("infer", help="compute and validate private component probabilities without changing the archive")
     commands.add_parser("check-envelope", help="validate ciphertext packaging without a passkey")
     for name in ("pack", "unpack", "verify-encrypted"):
         sub = commands.add_parser(name)
@@ -95,6 +97,13 @@ def main() -> int:
         elif args.command == "validate":
             kb = validate_local(root)
             print(f"Validated {len(kb['propositions'])} propositions and {len(kb['arguments'])} arguments, including every origin pointer.")
+        elif args.command == "infer":
+            kb = validate_local(root)
+            report = infer(kb)
+            validate_inference(kb, report)
+            target = local_data_path(root, "data/knowledge/inference.json")
+            target.write_text(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+            print(f"Computed {len(report['probabilities'])} probabilities across {len(report['components'])} exact components; report saved privately.")
         elif args.command == "check-envelope":
             validate_envelope(root / "encrypted")
             print("Encrypted envelope and asset hashes passed. Plaintext provenance requires verify-encrypted.")

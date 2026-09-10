@@ -8,3 +8,5 @@ These screenshots use only the fictional garden/library browser-test fixture. Th
 - `transcript-intro-1440.png` and `transcript-intro-390.png`: a fictional session starts with its editorial note; the export header and explanatory UI paragraph are absent.
 - `thesis-list-1440.png` and `thesis-list-390.png`: the fictional thesis list retains its counts and sorting without the explanatory count paragraph.
 - `symbols-default-1440.png` and `symbols-default-390.png`: the fictional symbol list defaults to most meanings, with alphabetical tie-breaking.
+- `probability-list-1440.png` and `probability-list-390.png`: computed thesis probabilities beside the support/refute counts, with probability sorting.
+- `probability-atoms-1440.png` and `probability-atoms-390.png`: probabilities inside the antecedent atom circles; selecting a value opens the model assumptions.

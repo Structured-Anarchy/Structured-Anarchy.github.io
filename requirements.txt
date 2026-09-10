@@ -5,3 +5,5 @@ pytest>=8.0
 cryptography>=44.0
 jsonschema>=4.23
 tomli-w>=1.2
+numpy>=2.1
+scipy>=1.14

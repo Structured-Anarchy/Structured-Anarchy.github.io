@@ -163,9 +163,9 @@ def test_unlock_graph_meanings_passages_and_refresh(browser, mock_site, viewport
     unlock(page)
     expect(page.locator(".thesis-row")).to_have_count(2)
     expect(page.locator("#content-passkey")).to_have_value("")
-    # Only the catalog and graph decrypt at unlock; source files are lazy.
+    # Catalog, graph and probability report decrypt at unlock; sources are lazy.
     initial_assets = set(request for request in requests if request.endswith(".bin"))
-    assert len(initial_assets) == 2
+    assert len(initial_assets) == 3
     page.locator(".thesis-row").filter(has_text="garden").click()
     expect(page.locator(".atom-card")).to_have_count(1)
     expect(page.locator("path.support-segment")).to_have_count(1)
@@ -191,7 +191,7 @@ def test_unlock_graph_meanings_passages_and_refresh(browser, mock_site, viewport
     expect(dialog.locator(".source-passage")).to_have_count(2)
     expect(dialog).to_contain_text("Birdsong is permitted")
     page.screenshot(path=str(screenshot_dir / f"passages-{viewport['width']}.png"))
-    assert len(set(request for request in requests if request.endswith(".bin"))) == 3
+    assert len(set(request for request in requests if request.endswith(".bin"))) == 4
     dialog.get_by_role("button", name="Turn on speed reading", exact=True).click()
     expect(dialog.locator("[data-speed-reader-stage]")).to_be_visible()
     expect(dialog.locator("[data-speed-reader-context]")).to_contain_text("12 January 2026 · Fictional City")
