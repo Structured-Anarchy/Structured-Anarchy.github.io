@@ -18,6 +18,13 @@ function timestampPrefix(line) {
   return line.match(/^[ \t]*(?:\[~?\d{2,}:[0-5]\d(?::[0-5]\d)?\](?:[ \t]+|(?=\r?$))|~?\d{2,}:[0-5]\d(?::[0-5]\d)?[ \t\r]*$)/)?.[0] || "";
 }
 
+function refinementHeaderLength(text) {
+  // Hide only the leading export title/source pair, not similar spoken text.
+  // Count codepoints so the retained source and all citation offsets agree.
+  const header = text.match(/^\uFEFF?SECOND-PASS REFINED TRANSCRIPT(?:[ \t]+—[^\r\n]*)?[ \t]*\r?\nSource:[^\r\n]*(?:\r?\n|$)(?:[ \t]*\r?\n)*/)?.[0] || "";
+  return Array.from(header).length;
+}
+
 export function createTranscriptView(container, popup, vault, onThesis) {
   let version = 0, observer = null, trigger = null, closeTimer = null;
   function closeMenu() {
@@ -86,17 +93,21 @@ export function createTranscriptView(container, popup, vault, onThesis) {
         throw new Error("This transcript position is outside the source text.");
       }
       container.replaceChildren();
-      container.append(node("h2", source.label, "transcript-title"),
-        node("p", "Timestamps sit in the margin and are skipped during speed reading; ~ marks an estimated time. Margin markers link to theses using a passage as assertion evidence, including premises and objections. A citation records what was said; it does not prove it true.", "map-note"));
+      container.append(node("h2", source.label, "transcript-title"));
       const body = node("div", undefined, "transcript-lines");
       body.dataset.transcriptSource = source.id;
       body.dataset.passageLabel = source.label;
+      const headerEnd = refinementHeaderLength(text);
       const markers = model.transcriptMarkers(source.file_name), positions = [];
       let markerIndex = 0, lineStart = 0, target = null;
       for (let end = 0; end <= chars.length; end += 1) {
         if (end < chars.length && chars[end] !== "\n") continue;
         const row = node("div", undefined, "transcript-line"), content = node("div", undefined, "transcript-text");
         row.dataset.start = lineStart;
+        if (lineStart < headerEnd) {
+          row.hidden = true;
+          row.dataset.readerSkip = "";
+        }
         const line = chars.slice(lineStart, end).join(""), prefix = timestampPrefix(line);
         const timestampEnd = lineStart + Array.from(prefix).length;
         let timestamp = null;
@@ -165,6 +176,7 @@ export function createTranscriptView(container, popup, vault, onThesis) {
         const lineHeight = parseFloat(getComputedStyle(body).lineHeight);
         for (const position of positions) {
           const { row, anchor, button } = position;
+          if (row.hidden) { button.hidden = true; continue; }
           const rowTop = row.getBoundingClientRect().top;
           const top = anchor.closest(".transcript-timestamp") ? 0 :
             Math.floor(Math.max(0, anchor.getBoundingClientRect().top - rowTop) / lineHeight) * lineHeight;

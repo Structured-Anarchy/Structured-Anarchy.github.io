@@ -237,8 +237,12 @@ def test_recursive_counts_sort_induction_and_transcript_roundtrip(browser, mock_
     expect(garden.locator(".support-key")).to_have_text("2 support")
     expect(garden.locator(".refute-key")).to_have_text("1 refute")
     expect(garden.locator(".writing-meta")).to_contain_text("2 sessions")
+    expect(page.locator("[data-thesis-list] > .map-note")).to_have_count(0)
     page.locator("[data-thesis-sort]").select_option("refute")
     expect(page.locator(".thesis-row").first).to_contain_text("garden")
+    screenshot_dir = Path("/tmp/sa-map-screenshots")
+    screenshot_dir.mkdir(exist_ok=True)
+    page.screenshot(path=str(screenshot_dir / f"thesis-list-{width}.png"), full_page=True)
     page.locator(".thesis-row").filter(has_text="library").click()
     segment = page.locator("path.support-segment").filter(has_text="study groups")
     segment.focus()
@@ -247,8 +251,6 @@ def test_recursive_counts_sort_induction_and_transcript_roundtrip(browser, mock_
     expect(induced.locator(".induced-badge")).to_have_text("Induced · unsubstantiated")
     expect(induced.locator(".statement-source")).to_have_count(0)
     expect(page.locator(".reconstruction-note")).not_to_have_attribute("open", "")
-    screenshot_dir = Path("/tmp/sa-map-screenshots")
-    screenshot_dir.mkdir(exist_ok=True)
     page.screenshot(path=str(screenshot_dir / f"induced-{width}.png"), full_page=True)
     page.locator('[data-proposition="library-study"] .statement-source').click()
     dialog = page.locator("[data-evidence-dialog]")
@@ -455,6 +457,15 @@ def test_symbol_catalog_sort_meanings_passages_and_archive_navigation(browser, m
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(url + "/symbols-and-meaning/")
     unlock(page)
+    expect(page.locator("[data-symbol-sort]")).to_have_value("meanings")
+    labels = page.locator(".symbol-row .writing-title").all_text_contents()
+    counts = [int(text.split()[0]) for text in page.locator(".symbol-row .writing-meta").all_text_contents()]
+    rows = list(zip(counts, labels))
+    assert rows == sorted(rows, key=lambda row: (-row[0], row[1].casefold()))
+    screenshot_dir = Path("/tmp/sa-map-screenshots")
+    screenshot_dir.mkdir(exist_ok=True)
+    page.screenshot(path=str(screenshot_dir / f"symbols-default-{width}.png"))
+    page.locator("[data-symbol-sort]").select_option("alphabetical")
     labels = page.locator(".symbol-row .writing-title").all_text_contents()
     assert labels == sorted(labels, key=str.casefold)
     if width == 1440:
@@ -474,8 +485,6 @@ def test_symbol_catalog_sort_meanings_passages_and_archive_navigation(browser, m
     expect(popup).to_be_visible()
     expect(popup.locator(".meaning-list > li")).to_have_count(4)
     expect(popup).to_contain_text("No definition was declared")
-    screenshot_dir = Path("/tmp/sa-map-screenshots")
-    screenshot_dir.mkdir(exist_ok=True)
     page.screenshot(path=str(screenshot_dir / f"symbols-{width}.png"))
     popup.get_by_role("button", name="Little traffic noise; birdsong is permitted.", exact=True).click()
     dialog = page.locator("[data-evidence-dialog]")
@@ -505,6 +514,10 @@ def test_symbol_catalog_sort_meanings_passages_and_archive_navigation(browser, m
     page.keyboard.press("Escape")
     expect(popup).to_be_hidden()
     expect(page.locator('[data-symbol="symbol-quiet"]')).to_be_focused()
+    page.reload()
+    unlock(page)
+    expect(page.locator("[data-symbol-sort]")).to_have_value("meanings")
+    expect(page.locator(".symbol-row").first).to_contain_text("quiet")
     page.get_by_role("button", name="Lock archive", exact=True).click()
     expect(page.locator(".symbol-row")).to_have_count(0)
     expect(popup).to_be_empty()
@@ -548,9 +561,77 @@ def render_timestamp_example(page, text, start=None, stop=None, markers=()):
         menu,
         {source: async () => text}, () => {});
       await window.timestampExample.show(
-        {id: 'timestamp-example', file_name: 'fictional.txt', label: 'Fictional timestamp examples'},
+        {id: 'timestamp-example', file_name: 'fictional.txt', label: 'Fictional session'},
         {transcriptMarkers: () => markers}, start, stop);
     }""", dict(text=text, start=start, stop=stop, markers=markers))
+
+
+@pytest.mark.parametrize("width", [1440, 390, 320])
+@pytest.mark.parametrize("estimated", [False, True])
+def test_transcript_intro_cleanup_preserves_notes_reading_and_citations(browser, mock_site, width, estimated):
+    from playwright.sync_api import expect
+    url, _ = mock_site
+    page = browser.new_page(viewport={"width": width, "height": 950}, has_touch=width != 1440)
+    page.goto(url + "/discussions/#source=source-one")
+    unlock(page)
+    page.locator(".transcript-lines").wait_for()
+    title = "SECOND-PASS REFINED TRANSCRIPT"
+    if estimated:
+        title = "\ufeff" + title + " — ESTIMATED TIMESTAMPS"
+    note = "Timing note: times are estimated." if estimated else "Editorial note: wording is preserved."
+    newline = "\r\n" if estimated else "\n"
+    raw = newline.join([title, "Source: fictional-🌿.txt", "", note, "", "00:05", "The garden is quiet.", ""])
+    render_timestamp_example(page, raw)
+    body = page.locator("[data-transcript-body]")
+    expect(body.locator(".transcript-title")).to_have_text("Fictional session")
+    expect(body.locator(":scope > p")).to_have_count(0)
+    expect(page.locator(".transcript-text:visible").first).to_have_text(note)
+    assert "SECOND-PASS" not in body.inner_text()
+    assert "fictional-🌿.txt" not in body.inner_text()
+    assert page.locator(".transcript-text").evaluate_all("rows => rows.map(r => r.textContent).join('\\n')") == raw
+    if not estimated and width in (1440, 390):
+        screenshot_dir = Path("/tmp/sa-map-screenshots")
+        screenshot_dir.mkdir(exist_ok=True)
+        page.locator("[data-transcript-view]").screenshot(path=str(screenshot_dir / f"transcript-intro-{width}.png"))
+    page.get_by_role("button", name="Turn on speed reading", exact=True).click()
+    expect(page.locator("[data-speed-reader-glance]")).to_have_text(" ".join(note.split()[:3]), use_inner_text=True)
+    page.keyboard.press("Escape")
+    # Existing codepoint links still highlight and read the exact spoken text,
+    # even with an astral character in the hidden filename and CRLF newlines.
+    start = raw.index("The garden")
+    stop = start + len("The garden is quiet.")
+    markers = [dict(start=start, theses=[dict(id="garden-open", text="The garden should stay open.")])]
+    render_timestamp_example(page, raw, start, stop, markers)
+    expect(page.locator(".transcript-highlight")).to_have_text(raw[start:stop])
+    marker = page.locator(".transcript-marker:visible")
+    expect(marker).to_have_attribute("data-passage-start", str(start))
+    if width == 1440:
+        marker.hover()
+    else:
+        marker.tap()
+    expect(page.locator("#timestamp-example-menu a")).to_have_attribute("href", "/structural-map/#garden-open")
+    page.keyboard.press("Escape")
+    page.get_by_role("button", name="Turn on speed reading", exact=True).click()
+    expect(page.locator("[data-speed-reader-glance]")).to_have_text("The garden is")
+    page.keyboard.press("Escape")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    page.close()
+
+
+@pytest.mark.parametrize("raw", [
+    "Editorial note: wording is preserved.\nSource: a speaker's example.\n",
+    "SECOND-PASS REFINED TRANSCRIPT\nThis is spoken text without a source header.\n",
+    "A speaker quotes an export:\nSECOND-PASS REFINED TRANSCRIPT\nSource: fictional.txt\n",
+])
+def test_transcript_intro_cleanup_leaves_other_text_visible(browser, mock_site, raw):
+    url, _ = mock_site
+    page = browser.new_page()
+    page.goto(url + "/discussions/#source=source-one")
+    unlock(page)
+    page.locator(".transcript-lines").wait_for()
+    render_timestamp_example(page, raw)
+    assert page.locator(".transcript-line:visible .transcript-text").evaluate_all("rows => rows.map(r => r.textContent).join('\\n')") == raw
+    page.close()
 
 
 @pytest.mark.parametrize("width", [1440, 390, 320])
