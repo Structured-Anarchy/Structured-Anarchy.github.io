@@ -548,9 +548,77 @@ def render_timestamp_example(page, text, start=None, stop=None, markers=()):
         menu,
         {source: async () => text}, () => {});
       await window.timestampExample.show(
-        {id: 'timestamp-example', file_name: 'fictional.txt', label: 'Fictional timestamp examples'},
+        {id: 'timestamp-example', file_name: 'fictional.txt', label: 'Fictional session'},
         {transcriptMarkers: () => markers}, start, stop);
     }""", dict(text=text, start=start, stop=stop, markers=markers))
+
+
+@pytest.mark.parametrize("width", [1440, 390, 320])
+@pytest.mark.parametrize("estimated", [False, True])
+def test_transcript_intro_cleanup_preserves_notes_reading_and_citations(browser, mock_site, width, estimated):
+    from playwright.sync_api import expect
+    url, _ = mock_site
+    page = browser.new_page(viewport={"width": width, "height": 950}, has_touch=width != 1440)
+    page.goto(url + "/discussions/#source=source-one")
+    unlock(page)
+    page.locator(".transcript-lines").wait_for()
+    title = "SECOND-PASS REFINED TRANSCRIPT"
+    if estimated:
+        title = "\ufeff" + title + " — ESTIMATED TIMESTAMPS"
+    note = "Timing note: times are estimated." if estimated else "Editorial note: wording is preserved."
+    newline = "\r\n" if estimated else "\n"
+    raw = newline.join([title, "Source: fictional-🌿.txt", "", note, "", "00:05", "The garden is quiet.", ""])
+    render_timestamp_example(page, raw)
+    body = page.locator("[data-transcript-body]")
+    expect(body.locator(".transcript-title")).to_have_text("Fictional session")
+    expect(body.locator(":scope > p")).to_have_count(0)
+    expect(page.locator(".transcript-text:visible").first).to_have_text(note)
+    assert "SECOND-PASS" not in body.inner_text()
+    assert "fictional-🌿.txt" not in body.inner_text()
+    assert page.locator(".transcript-text").evaluate_all("rows => rows.map(r => r.textContent).join('\\n')") == raw
+    if not estimated and width in (1440, 390):
+        screenshot_dir = Path("/tmp/sa-map-screenshots")
+        screenshot_dir.mkdir(exist_ok=True)
+        page.locator("[data-transcript-view]").screenshot(path=str(screenshot_dir / f"transcript-intro-{width}.png"))
+    page.get_by_role("button", name="Turn on speed reading", exact=True).click()
+    expect(page.locator("[data-speed-reader-glance]")).to_have_text(" ".join(note.split()[:3]), use_inner_text=True)
+    page.keyboard.press("Escape")
+    # Existing codepoint links still highlight and read the exact spoken text,
+    # even with an astral character in the hidden filename and CRLF newlines.
+    start = raw.index("The garden")
+    stop = start + len("The garden is quiet.")
+    markers = [dict(start=start, theses=[dict(id="garden-open", text="The garden should stay open.")])]
+    render_timestamp_example(page, raw, start, stop, markers)
+    expect(page.locator(".transcript-highlight")).to_have_text(raw[start:stop])
+    marker = page.locator(".transcript-marker:visible")
+    expect(marker).to_have_attribute("data-passage-start", str(start))
+    if width == 1440:
+        marker.hover()
+    else:
+        marker.tap()
+    expect(page.locator("#timestamp-example-menu a")).to_have_attribute("href", "/structural-map/#garden-open")
+    page.keyboard.press("Escape")
+    page.get_by_role("button", name="Turn on speed reading", exact=True).click()
+    expect(page.locator("[data-speed-reader-glance]")).to_have_text("The garden is")
+    page.keyboard.press("Escape")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    page.close()
+
+
+@pytest.mark.parametrize("raw", [
+    "Editorial note: wording is preserved.\nSource: a speaker's example.\n",
+    "SECOND-PASS REFINED TRANSCRIPT\nThis is spoken text without a source header.\n",
+    "A speaker quotes an export:\nSECOND-PASS REFINED TRANSCRIPT\nSource: fictional.txt\n",
+])
+def test_transcript_intro_cleanup_leaves_other_text_visible(browser, mock_site, raw):
+    url, _ = mock_site
+    page = browser.new_page()
+    page.goto(url + "/discussions/#source=source-one")
+    unlock(page)
+    page.locator(".transcript-lines").wait_for()
+    render_timestamp_example(page, raw)
+    assert page.locator(".transcript-line:visible .transcript-text").evaluate_all("rows => rows.map(r => r.textContent).join('\\n')") == raw
+    page.close()
 
 
 @pytest.mark.parametrize("width", [1440, 390, 320])
